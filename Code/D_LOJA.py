@@ -27,9 +27,7 @@ def treat_dim_loja(dim_loja):
                apply(lambda y: y[:3] + y[4:7] + y[8:11] + y[12:]),
                NU_TELEFONE=lambda x: x.NU_TELEFONE.
                apply(lambda y: y[1:3] + y[4:8] + y[9:])).
-        assign(CD_LOJA=lambda x: x.CD_LOJA.astype("int64"),
-               NU_TELEFONE=lambda x: x.NU_TELEFONE.astype("int64"),
-               NU_CNPJ=lambda x: x.NU_CNPJ.astype("int64"))
+        assign(CD_LOJA=lambda x: x.CD_LOJA.astype("int64"))
     )
 
     dim_loja.insert(0, 'SK_LOJA', range(1, 1 + len(dim_loja)))
@@ -48,6 +46,7 @@ def treat_dim_loja(dim_loja):
 
 def load_dim_loja(dim_loja, conn):
     insert_data(dim_loja, conn, 'D_LOJA', 'DW', 'replace')
+
 
 def run_dim_loja(conn):
     (

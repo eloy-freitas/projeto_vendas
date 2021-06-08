@@ -6,7 +6,7 @@ from tools import insert_data, get_data_from_database
 def extract_dim_funcionario(conn):
     dim_funcionario = get_data_from_database(
         conn_input=conn,
-        sql_query=f'select * from "STAGES"."STAGE_FUNCIONARIO"'
+        sql_query=f'select * from "STAGES"."STAGE_FUNCIONARIO";'
     )
 
     return dim_funcionario
@@ -25,12 +25,12 @@ def treat_dim_funcionario(dim_funcionario):
         dim_funcionario.
         rename(columns=columns_names).
         assign(
-            NU_CPF=lambda x: x.NU_CPF.
-            apply(lambda y: y[:3] + y[4:7] + y[8:11] + y[12:]),
-            NU_TELEFONE=lambda x: x.NU_TELEFONE.
-            apply(lambda y: y[1:3] + y[4:8] + y[-4:]),
+            NU_CPF=lambda x: x.NU_CPF.apply(
+                lambda y: y[:3] + y[4:7] + y[8:11] + y[12:]),
+            NU_TELEFONE=lambda x: x.NU_TELEFONE.apply(
+                lambda y: y[1:3] + y[4:8] + y[-4:]),
             DT_NASCIMENTO=lambda x: x.DT_NASCIMENTO.
-            astype('datetime64'))
+                astype('datetime64'))
     )
 
     dim_funcionario.\

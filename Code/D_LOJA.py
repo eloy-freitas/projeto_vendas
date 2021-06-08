@@ -18,26 +18,29 @@ def treat_dim_loja(dim_loja):
                      "razao_social": "DS_RAZAO_SOCIAL",
                      "cnpj": "NU_CNPJ",
                      "telefone": "NU_TELEFONE",
-                     "id_endereco": "CD_ENDERECO"
+                     "id_endereco": "CD_ENDERECO_LOJA"
                      }
     dim_loja = (
         dim_loja.
         rename(columns=columns_names).
-        assign(NU_CNPJ=lambda x: x.NU_CNPJ.
-               apply(lambda y: y[:3] + y[4:7] + y[8:11] + y[12:]),
-               NU_TELEFONE=lambda x: x.NU_TELEFONE.
-               apply(lambda y: y[1:3] + y[4:8] + y[9:])).
-        assign(CD_LOJA=lambda x: x.CD_LOJA.astype("int64"))
+        assign(
+            NU_CNPJ=lambda x: x.NU_CNPJ.apply(
+                lambda y: y[:3] + y[4:7] + y[8:11] + y[12:]),
+            NU_TELEFONE=lambda x: x.NU_TELEFONE.apply(
+                lambda y: y[1:3] + y[4:8] + y[9:])).
+        assign(
+            CD_LOJA=lambda x: x.CD_LOJA.astype("int64"),
+            CD_ENDERECO_LOJA=lambda x: x.CD_ENDERECO_LOJA.astype("int64")
+        )
     )
 
     dim_loja.insert(0, 'SK_LOJA', range(1, 1 + len(dim_loja)))
-    dim_loja.pop('CD_ENDERECO')
 
     dim_loja = (
         pd.DataFrame([
-            [-1, -1, "Não informado", "Não informado", -1, -1],
-            [-2, -2, "Não aplicável", "Não aplicável", -2, -2],
-            [-3, -3, "Desconhecido", "Desconhecido", -3, -3]
+            [-1, -1, "Não informado", "Não informado", -1, -1, -1],
+            [-2, -2, "Não aplicável", "Não aplicável", -2, -2, -2],
+            [-3, -3, "Desconhecido", "Desconhecido", -3, -3, -3]
         ], columns=dim_loja.columns).append(dim_loja)
     )
 

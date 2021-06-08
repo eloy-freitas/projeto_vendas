@@ -18,7 +18,7 @@ def treat_dim_cliente(dim_cliente):
         "nome": "NO_CLIENTE",
         "cpf": "NU_CPF",
         "tel": "NU_TELEFONE",
-        "id_endereco": "CD_ENDERECO"
+        "id_endereco": "CD_ENDERECO_CLIENTE"
     }
 
     dim_cliente = (
@@ -31,18 +31,18 @@ def treat_dim_cliente(dim_cliente):
                 lambda y: y[1:3] + y[4:8] + y[-4:]
             )).
         assign(
-            CD_CLIENTE=lambda x: x.CD_CLIENTE.astype('int64')
+            CD_CLIENTE=lambda x: x.CD_CLIENTE.astype('int64'),
+            CD_ENDERECO_CLIENTE=lambda x: x.CD_ENDERECO_CLIENTE.astype("int64")
         )
     )
 
     dim_cliente.insert(0, 'SK_CLIENTE', range(1, 1 + len(dim_cliente)))
-    dim_cliente.pop("CD_ENDERECO")
 
     dim_cliente = (
         pd.DataFrame([
-            [-1, -1, "Não informado", -1, -1],
-            [-2, -2, "Não aplicável", -2, -2],
-            [-3, -3, "Desconhecido", -3, -3]
+            [-1, -1, "Não informado", -1, -1, -1],
+            [-2, -2, "Não aplicável", -2, -2, -2],
+            [-3, -3, "Desconhecido", -3, -3, -3]
         ], columns=dim_cliente.columns).append(dim_cliente)
     )
 

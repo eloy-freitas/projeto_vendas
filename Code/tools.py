@@ -24,6 +24,18 @@ def insert_data(data, connection, table_name, schema_name, action):
     )
 
 
+def merge_input(left, right, left_on, right_on, surrogate_key, suff):
+    dict_na = right.query(f"{surrogate_key} == -3").to_dict('index')
+
+    df = (
+        left.
+            merge(right, how="left", left_on=left_on, right_on=right_on, suffixes=suff).
+            fillna(dict_na[list(dict_na)[0]])
+    )
+
+    return df
+
+
 def get_data_from_database(conn_input, sql_query):
     return pd.read_sql_query(sql=sql_query, con=conn_input)
 

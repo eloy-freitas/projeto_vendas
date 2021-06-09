@@ -1,4 +1,5 @@
 import pandas as pd
+import time as t
 from CONEXAO import create_connection_postgre
 from tools import insert_data, get_data_from_database
 
@@ -25,10 +26,8 @@ def treat_dim_cliente(dim_cliente):
         dim_cliente.
         rename(columns=columns_name).
         assign(
-            NU_CPF=lambda x: x.NU_CPF.apply(
-                lambda y: y[:3] + y[4:7] + y[8:11] + y[12:]),
             NU_TELEFONE=lambda x: x.NU_TELEFONE.apply(
-                lambda y: y[1:3] + y[4:8] + y[-4:]
+                lambda y: y[0:8] + y[-5:]
             )).
         assign(
             CD_CLIENTE=lambda x: x.CD_CLIENTE.astype('int64'),
@@ -70,4 +69,7 @@ if __name__ == "__main__":
         port="5432"
     )
 
+    start = t.time()
     run_dim_cliente(conn_dw)
+    exec_time = t.time() - start
+    print(f"exec_time = {exec_time}")

@@ -47,7 +47,8 @@ def extract_fact_venda(conn):
 
     dim_produto = get_data_from_database(
         conn_input=conn,
-        sql_query=f'select "SK_PRODUTO", "CD_PRODUTO" \
+        sql_query=f'select "SK_PRODUTO", "CD_PRODUTO", "CD_CATEGORIA",\
+        "VL_PRECO_CUSTO", "VL_PERCENTUAL_LUCRO"\
         from "DW"."D_PRODUTO";'
     )
 
@@ -55,6 +56,12 @@ def extract_fact_venda(conn):
         conn_input=conn,
         sql_query=f'select "SK_ENDERECO", "CD_ENDERECO" \
         from "DW"."D_ENDERECO";'
+    )
+
+    dim_categoria = get_data_from_database(
+        conn_input=conn,
+        sql_query=f'select "SK_CATEGORIA", "CD_CATEGORIA" \
+        from "DW"."D_CATEGORIA";'
     )
 
     fact_venda = (
@@ -109,7 +116,13 @@ def extract_fact_venda(conn):
                  right=dim_endereco,
                  left_on="CD_ENDERECO_CLIENTE",
                  right_on="CD_ENDERECO",
-                 suffixes=["_17", "_18"])
+                 suffixes=["_17", "_18"]).
+            pipe(merge_input,
+                 right=dim_categoria,
+                 left_on="CD_CATEGORIA",
+                 right_on="CD_CATEGORIA",
+                 suff=["_19", "_20"],
+                 surrogate_key="SK_CATEGORIA")
     )
 
     return fact_venda
@@ -133,23 +146,49 @@ def treat_fact_venda(fact_tbl):
         "SK_PRODUTO",
         "SK_ENDERECO_LOJA",
         "SK_ENDERECO_CLIENTE",
+        "SK_CATEGORIA",
         "NU_NFC",
-        "QTD_PRODUTO"
+        "QTD_PRODUTO",
+        "VL_BRUTO",
+        "VL_LIQUIDO"
     ]
 
     fact_venda = (
         fact_tbl.
             rename(columns=columns_names).
+            assign(
+                SK_CLIENTE=lambda x: x.SK_CLIENTE.astype('int64'),
+                VL_BRUTO=lambda x: x.VL_PRECO_CUSTO * x.QTD_PRODUTO,
+                VL_LIQUIDO=lambda x:x.VL_BRUTO * x.VL_PERCENTUAL_LUCRO).
             filter(columns_select)
     )
 
-    print(fact_venda)
+    fact_venda = (
+        pd.DataFrame([
+            [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+            [-2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2],
+            [-3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3]
+        ], columns=fact_venda.columns).append(fact_venda)
+    )
+
+    return fact_venda
+
+
+def load_fact_venda(fact_venda, conn):
+    insert_data(
+        data=fact_venda,
+        connection=conn,
+        table_name='F_VENDA',
+        schema_name="DW",
+        action='replace'
+    )
 
 
 def run_fact_venda(conn):
     (
         extract_fact_venda(conn).
-            pipe(treat_fact_venda)
+            pipe(treat_fact_venda).
+            pipe(load_fact_venda, conn=conn)
     )
 
 

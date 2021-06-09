@@ -1,4 +1,6 @@
 import pandas as pd
+import datetime as dt
+import time as t
 from CONEXAO import create_connection_postgre
 from tools import insert_data, get_data_from_database
 
@@ -19,16 +21,29 @@ def treat_dim_data(dim_data):
 
     dim_data = (
         dim_data.
-        rename(columns=columns_names)
+            rename(columns=columns_names).
+            assign(
+                DT_REFERENCIA=lambda x: pd.to_datetime(x.DT_REFERENCIA),
+                DS_TURNO=lambda x: x.DT_REFERENCIA.map(lambda y: y.time())).
+            assign(
+            DS_TURNO=lambda x: x.DS_TURNO.apply(
+                lambda y:
+                "Manhã" if dt.time(6, 0) < y < dt.time(11, 59) else
+                "Tarde" if dt.time(12, 0) < y < dt.time(17, 59) else
+                "Noite" if dt.time(18, 0) < y < dt.time(23,59) else
+                "Madrugada" if dt.time(0, 0) < y < dt.time(5, 59) else
+                "Não informado"
+            )
+        )
     )
 
     dim_data.insert(0, 'SK_DATA', range(1, 1 + len(dim_data)))
 
     dim_data = (
         pd.DataFrame([
-            [-1, "Não informado"],
-            [-2, "Não aplicável"],
-            [-3, "Desconhecido"]
+            [-1, "Não informado", "Não informado"],
+            [-2, "Não aplicável", "Não aplicável"],
+            [-3, "Desconhecido", "Desconhecido"]
         ], columns=dim_data.columns).append(dim_data)
     )
 
@@ -48,8 +63,8 @@ def load_dim_data(dim_data, conn):
 def run_dim_data(conn):
     (
         extract_dim_data(conn).
-        pipe(treat_dim_data).
-        pipe(load_dim_data, conn=conn)
+            pipe(treat_dim_data).
+            pipe(load_dim_data, conn=conn)
     )
 
 
@@ -62,4 +77,7 @@ if __name__ == "__main__":
         port="5432"
     )
 
+    start = t.time()
     run_dim_data(conn_dw)
+    exec_time = t.time() - start
+    print(f"exec_time = {exec_time}")

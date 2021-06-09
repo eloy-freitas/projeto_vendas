@@ -1,4 +1,5 @@
 import pandas as pd
+import time as t
 from CONEXAO import create_connection_postgre
 from tools import insert_data, get_data_from_database
 
@@ -73,4 +74,7 @@ if __name__ == "__main__":
         port="5432"
     )
 
+    start = t.time()
     run_dim_forma_pagamento(conn_dw)
+    exec_time = t.time() - start
+    print(f"exec_time = {exec_time}")

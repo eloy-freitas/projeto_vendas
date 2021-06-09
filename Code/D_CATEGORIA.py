@@ -1,4 +1,5 @@
 import pandas as pd
+import time as t
 from CONEXAO import create_connection_postgre
 from tools import insert_data
 
@@ -25,11 +26,17 @@ def treat_dim_categoria():
         range(1, 1 + len(dim_categoria))
     )
 
+    dim_categoria.insert(
+        1,
+        'CD_CATEGORIA',
+        range(1, 1 + len(dim_categoria))
+    )
+
     dim_categoria = (
         pd.DataFrame([
-            [-1, "Não informado"],
-            [-2, "Não aplicável"],
-            [-3, "Desconhecido"]
+            [-1, -1, "Não informado"],
+            [-2, -2, "Não aplicável"],
+            [-3, -3, "Desconhecido"]
         ], columns=dim_categoria.columns).append(dim_categoria)
     )
 
@@ -62,4 +69,7 @@ if __name__ == "__main__":
         port="5432"
     )
 
+    start = t.time()
     run_dim_categoria(conn_dw)
+    exec_time = t.time() - start
+    print(f"exec_time = {exec_time}")

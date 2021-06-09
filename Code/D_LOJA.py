@@ -1,4 +1,5 @@
 import pandas as pd
+import time as t
 from CONEXAO import create_connection_postgre
 from tools import insert_data, get_data_from_database
 
@@ -23,11 +24,6 @@ def treat_dim_loja(dim_loja):
     dim_loja = (
         dim_loja.
         rename(columns=columns_names).
-        assign(
-            NU_CNPJ=lambda x: x.NU_CNPJ.apply(
-                lambda y: y[:3] + y[4:7] + y[8:11] + y[12:]),
-            NU_TELEFONE=lambda x: x.NU_TELEFONE.apply(
-                lambda y: y[1:3] + y[4:8] + y[9:])).
         assign(
             CD_LOJA=lambda x: x.CD_LOJA.astype("int64"),
             CD_ENDERECO_LOJA=lambda x: x.CD_ENDERECO_LOJA.astype("int64")
@@ -68,4 +64,7 @@ if __name__ == "__main__":
         port="5432"
     )
 
+    start = t.time()
     run_dim_loja(conn_dw)
+    exec_time = t.time() - start
+    print(f"exec_time = {exec_time}")

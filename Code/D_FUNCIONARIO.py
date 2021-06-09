@@ -1,4 +1,5 @@
 import pandas as pd
+import time as t
 from CONEXAO import create_connection_postgre
 from tools import insert_data, get_data_from_database
 
@@ -25,12 +26,7 @@ def treat_dim_funcionario(dim_funcionario):
         dim_funcionario.
         rename(columns=columns_names).
         assign(
-            NU_CPF=lambda x: x.NU_CPF.apply(
-                lambda y: y[:3] + y[4:7] + y[8:11] + y[12:]),
-            NU_TELEFONE=lambda x: x.NU_TELEFONE.apply(
-                lambda y: y[1:3] + y[4:8] + y[-4:]),
-            DT_NASCIMENTO=lambda x: x.DT_NASCIMENTO.
-                astype('datetime64'))
+            DT_NASCIMENTO=lambda x: x.DT_NASCIMENTO.astype('datetime64'))
     )
 
     dim_funcionario.\
@@ -68,4 +64,7 @@ if __name__ == "__main__":
         port="5432"
     )
 
+    start = t.time()
     run_dim_funcionario(conn_dw)
+    exec_time = t.time() - start
+    print(f"exec_time = {exec_time}")

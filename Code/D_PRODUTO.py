@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import datetime as dt
 import time as t
@@ -183,14 +184,13 @@ def insert_new_produto(conn):
     return insert_record
 
 
-def update_produto(conn):
+def get_updated_produto(conn):
     select_columns = [
         "CD_PRODUTO",
         "NO_PRODUTO",
         "CD_BARRA",
         "VL_PRECO_CUSTO",
-        "VL_PERCENTUAL_LUCRO",
-        "FL_ATIVO"
+        "VL_PERCENTUAL_LUCRO"
     ]
 
     df_stage = get_data_from_database(
@@ -199,9 +199,11 @@ def update_produto(conn):
         order by "id_produto";').rename(
             columns=columns_names).assign(
             VL_PRECO_CUSTO=lambda x:
-            x.VL_PRECO_CUSTO.apply(lambda y: float(y.replace(",", "."))),
+            x.VL_PRECO_CUSTO.apply(lambda y:
+                                   float(y.replace(",", "."))),
             VL_PERCENTUAL_LUCRO=lambda x:
-            x.VL_PERCENTUAL_LUCRO.apply(lambda y: float(y.replace(",", "."))))
+            x.VL_PERCENTUAL_LUCRO.apply(lambda y:
+                                        float(y.replace(",", "."))))
 
     df_dw = get_data_from_database(
         conn_input=conn,
@@ -209,13 +211,54 @@ def update_produto(conn):
         "CD_PRODUTO" > 0 order by "SK_PRODUTO";'
     )
 
+    #descobrindo quais linhas foram alteradas
     diference = (
         df_dw.filter(items=select_columns).
-            compare(df_stage.filter(items=select_columns))
+            compare(
+                df_stage.filter(items=select_columns),
+                align_axis=0,
+                keep_shape=False
+        )
     )
 
-    print(diference.columns)
+    #index das linha alteradas
+    indexes = {x[0] for x in diference.index}
 
+    #extraindo colunas que serão atualizadas
+    updated_values = df_dw.loc[indexes]
+
+    #atribuindo as atualizações reconhecidas
+    updated_values[diference.columns] = diference.iloc[1][diference.columns]
+
+    size = df_dw['SK_PRODUTO'].max() + 1
+
+    #atualizando a sequência das sk e cd
+    updated_values = (
+        updated_values.
+        assign(
+            SK_PRODUTO=lambda x: range(size, size + len(updated_values)),
+            CD_PRODUTO=lambda x: range(size, size + len(updated_values)),
+            DT_INICIO=lambda x: pd.to_datetime("today")
+        )
+    )
+
+    #atualizando as informações da slowly changing
+    update = (
+        df_dw.loc[indexes].assign(
+                FL_ATIVO=lambda x: 0,
+                DT_FIM=lambda x: pd.to_datetime("today"))
+    )
+
+    df_dw.update(update)
+
+    #anexando as novas linhas no dataframe atualizado
+    df_dw = (
+        df_dw.
+            append(updated_values).
+            assign(DT_FIM=lambda x: x.DT_FIM.astype('datetime64'))
+    )
+    
+    return df_dw
 
 
 def load_new_produto(insert_record, conn):
@@ -245,7 +288,8 @@ def run_new_produto(conn):
 
 def run_update_produto(conn):
     (
-        update_produto(conn)
+        get_updated_produto(conn).
+            pipe(load_dim_produto, conn=conn)
     )
 
 

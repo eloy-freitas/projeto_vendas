@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 import datetime as dt
 import time as t
@@ -215,12 +214,12 @@ def get_updated_produto(conn):
 
     # descobrindo quais linhas foram alteradas
     diference = (
-        df_dw.filter(items=select_columns).
-            compare(
-            df_stage.filter(items=select_columns),
-            align_axis=0,
-            keep_shape=False
-        )
+        df_dw.
+            filter(items=select_columns).
+            compare(df_stage.filter(items=select_columns),
+                    align_axis=0,
+                    keep_shape=False
+                    )
     )
 
     # identificando index das linhas alteradas
@@ -231,11 +230,6 @@ def get_updated_produto(conn):
     updated_values = (
         df_dw.loc[indexes].
             assign(
-            VL_PRECO_CUSTO=lambda x: diference.
-                iloc[1]['VL_PRECO_CUSTO'],
-            VL_PERCENTUAL_LUCRO=diference.
-                iloc[1]['VL_PERCENTUAL_LUCRO']).
-            assign(
             SK_PRODUTO=lambda x: range(size, size
                                        + len(indexes)),
             CD_PRODUTO=lambda x: df_dw.loc[indexes]['CD_PRODUTO'],
@@ -244,6 +238,9 @@ def get_updated_produto(conn):
             FL_ATIVO=lambda x: 1
         )
     )
+
+    for c in diference.columns:
+        updated_values[c] = diference.iloc[1][c]
 
     #identificando as sks que precisam ser atualizadas
     set_to_update = list(df_dw['SK_PRODUTO'].loc[indexes])

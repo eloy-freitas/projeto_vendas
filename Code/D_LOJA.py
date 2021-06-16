@@ -58,16 +58,19 @@ def get_updated_loja(conn):
         "CD_ENDERECO_LOJA"
     }
 
+    #extraindo os dados da stage
     df_stage = get_data_from_database(
         conn_input=conn,
         sql_query=f'select * from "STAGES"."STAGE_LOJA";'
     ).rename(columns=columns_names)
 
+    #extraindo os dados do dw
     df_dw = get_data_from_database(
         conn_input=conn,
         sql_query=f'select * from "DW"."D_LOJA" where "SK_LOJA" > 0;'
     )
 
+    #fazendo a diferença da stage com o dw, para saber os dados que atualizaram
     diference = (
         df_dw.
             filter(items=select_columns).
@@ -77,9 +80,11 @@ def get_updated_loja(conn):
                     )
     )
 
+    #identificando os indexes que foram alterados
     indexes = {x[0] for x in diference.index}
     size = df_dw['SK_LOJA'].max() + 1
 
+    #extraindo as linhas que foram alteradas e padronizando os dados
     updated_values = (
         df_dw.loc[indexes].
         assign(
@@ -92,11 +97,14 @@ def get_updated_loja(conn):
         )
     )
 
+    #atualizando cada coluna que foi atualizada
     for c in diference.columns:
         updated_values[c] = diference.iloc[1][c]
 
+    #identificando as sk que foram alteradas
     set_to_update = list(df_dw['SK_LOJA'].loc[indexes])
 
+    #atualizando a flag e data_fim dos dados atualizados
     for sk in set_to_update:
         sql = f'update "DW"."D_LOJA"\
             set "FL_ATIVO" = {0},\

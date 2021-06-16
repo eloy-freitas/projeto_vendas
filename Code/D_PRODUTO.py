@@ -16,35 +16,35 @@ columns_names = {
 }
 
 categoria_cafe_manha = {"CAFE", "ACHOCOLATADO", "CEREAIS", "PÃO",
-                            "AÇUCAR", "SUCO", "ADOÇANTE", "BISCOITO",
-                            "GELEIA", "IOGURTE"}
+                        "AÇUCAR", "SUCO", "ADOÇANTE", "BISCOITO",
+                        "GELEIA", "IOGURTE"}
 
 categoria_mercearia = {"ARROZ", "FEIJÃO", "FARINHA DE TRIGO",
-                           "AMIDO DE MILHO", "FERMENTO", "MACARRÃO",
-                           "MOLHO DE TOMATE", "AZEITE", "ÓLEO DE SOJA",
-                           "OVOS", "TEMPERO", "SAL", "FARINHA DE AVEIA",
-                           "EXTRATO DE TOMATE", "AÇUCAR 4 KG",
-                           "SAZON SABOR CARNE", "SAZON SABOR FRANGO"}
+                       "AMIDO DE MILHO", "FERMENTO", "MACARRÃO",
+                       "MOLHO DE TOMATE", "AZEITE", "ÓLEO DE SOJA",
+                       "OVOS", "TEMPERO", "SAL", "FARINHA DE AVEIA",
+                       "EXTRATO DE TOMATE", "AÇUCAR 4 KG",
+                       "SAZON SABOR CARNE", "SAZON SABOR FRANGO"}
 
 categoria_carnes = {"BIFE DE BOI", "FRANGO", "PEIXE", "CARNE MOIDA",
-                        "SALSICHA", "LINGUIÇA"}
+                    "SALSICHA", "LINGUIÇA"}
 
 categoria_bebidas = {"SUCO", "CERVEJA", "REFRIGERANTE", "VINHO"}
 
 categoria_higiene = {"SABONETE", "CREME DENTAL", "SHAMPOO",
-                         "CONDICIONADOR", "ABSORVENTE", "PAPEL HIGIÊNICO",
-                         "FRALDA"}
+                     "CONDICIONADOR", "ABSORVENTE", "PAPEL HIGIÊNICO",
+                     "FRALDA"}
 
 categoria_frios = {"LEITE", "PRESUNTO", "QUEIJO", "REQUEIJÃO",
-                       "MANTEIGA", "CREME DE LEITE"}
+                   "MANTEIGA", "CREME DE LEITE"}
 
 categoria_limpeza = {"AGUA SANITARIA", "SABÃO EM PÓ", "PALHA DE AÇO",
-                         "AMACIANTE", "DETERGENTE", "SACO DE LIXO",
-                         "DESINFETANTE", "PAPEL TOALHA", "PAPEL HIGIENICO"}
+                     "AMACIANTE", "DETERGENTE", "SACO DE LIXO",
+                     "DESINFETANTE", "PAPEL TOALHA", "PAPEL HIGIENICO"}
 
 categoria_hortifruti = {"ALFACE", "CEBOLA", "ALHO", "TOMATE",
-                            "LIMÃO", "BANANA", "MAÇÃ", "BATATA",
-                            "BATATA DOCE", "BATATA INGLESA"}
+                        "LIMÃO", "BANANA", "MAÇÃ", "BATATA",
+                        "BATATA DOCE", "BATATA INGLESA"}
 
 
 def extract_dim_produto(conn):
@@ -61,30 +61,32 @@ def treat_dim_produto(dim_produto):
         dim_produto.
             rename(columns=columns_names).
             assign(
-                VL_PRECO_CUSTO=lambda x: x.VL_PRECO_CUSTO.apply(
-                    lambda y: float(y.replace(",", "."))),
-                VL_PERCENTUAL_LUCRO=lambda x: x.VL_PERCENTUAL_LUCRO.apply(
-                    lambda y: float(y.replace(",", "."))),
-                DT_CADASTRO=lambda x: x.DT_CADASTRO.apply(
-                    lambda y: y[:10]),
-                DT_INICIO=lambda x: dt.date(1900, 1, 1),
-                DT_FIM=lambda x: None).
+            VL_PRECO_CUSTO=lambda x: x.VL_PRECO_CUSTO.apply(
+                lambda y: float(y.replace(",", "."))),
+            VL_PERCENTUAL_LUCRO=lambda x: x.VL_PERCENTUAL_LUCRO.apply(
+                lambda y: float(y.replace(",", "."))),
+            DT_CADASTRO=lambda x: x.DT_CADASTRO.apply(
+                lambda y: y[:10]),
+            DT_INICIO=lambda x: dt.date(1900, 1, 1),
+            DT_FIM=lambda x: None).
             assign(
-                CD_CATEGORIA=lambda x: x.NO_PRODUTO.map(
-                    lambda y:
-                    1 if y in categoria_cafe_manha else
-                    2 if y in categoria_mercearia else
-                    3 if y in categoria_carnes else
-                    4 if y in categoria_bebidas else
-                    5 if y in categoria_higiene else
-                    6 if y in categoria_frios else
-                    7 if y in categoria_limpeza else
-                    8 if y in categoria_hortifruti else -1)).
+            CD_CATEGORIA=lambda x: x.NO_PRODUTO.map(
+                lambda y:
+                1 if y in categoria_cafe_manha else
+                2 if y in categoria_mercearia else
+                3 if y in categoria_carnes else
+                4 if y in categoria_bebidas else
+                5 if y in categoria_higiene else
+                6 if y in categoria_frios else
+                7 if y in categoria_limpeza else
+                8 if y in categoria_hortifruti else -1)).
             assign(
-                DT_CADASTRO=lambda x: x.DT_CADASTRO.astype("datetime64"),
-                NO_PRODUTO=lambda x: x.NO_PRODUTO.astype(str),
-                FL_ATIVO=lambda x: x.FL_ATIVO.astype("int64"),
-                CD_CATEGORIA=lambda x: x.CD_CATEGORIA.astype("int64"))
+            DT_CADASTRO=lambda x: x.DT_CADASTRO.astype(str),
+            DT_INICIO= lambda x: x.DT_INICO.astype(str),
+            DT_FIM=lambda x: x.DT_FIM.astype(str),
+            NO_PRODUTO=lambda x: x.NO_PRODUTO.astype(str),
+            FL_ATIVO=lambda x: x.FL_ATIVO.astype("int64"),
+            CD_CATEGORIA=lambda x: x.CD_CATEGORIA.astype("int64"))
     )
 
     dim_produto.insert(0, 'SK_PRODUTO', range(1, 1 + len(dim_produto)))
@@ -138,16 +140,16 @@ def insert_new_produto(conn):
     insert_record = (
         join_df.
             query("FL_INSERT == 'I'")[[
-                "SK_PRODUTO",
-                "id_produto",
-                "nome_produto",
-                "cod_barra",
-                "preco_custo",
-                "percentual_lucro",
-                "data_cadastro",
-                "ativo",
-                "DT_INICIO",
-                "DT_FIM"]].
+            "SK_PRODUTO",
+            "id_produto",
+            "nome_produto",
+            "cod_barra",
+            "preco_custo",
+            "percentual_lucro",
+            "data_cadastro",
+            "ativo",
+            "DT_INICIO",
+            "DT_FIM"]].
             rename(columns=columns_names)
 
     )
@@ -164,21 +166,21 @@ def insert_new_produto(conn):
             VL_PERCENTUAL_LUCRO=lambda x: x.VL_PERCENTUAL_LUCRO.apply(
                 lambda y: float(y.replace(",", ".")))).
             assign(
-                CD_CATEGORIA=lambda x: x.NO_PRODUTO.map(
-                    lambda y:
-                    1 if y in categoria_cafe_manha else
-                    2 if y in categoria_mercearia else
-                    3 if y in categoria_carnes else
-                    4 if y in categoria_bebidas else
-                    5 if y in categoria_higiene else
-                    6 if y in categoria_frios else
-                    7 if y in categoria_limpeza else
-                    8 if y in categoria_hortifruti else -1)).
+            CD_CATEGORIA=lambda x: x.NO_PRODUTO.map(
+                lambda y:
+                1 if y in categoria_cafe_manha else
+                2 if y in categoria_mercearia else
+                3 if y in categoria_carnes else
+                4 if y in categoria_bebidas else
+                5 if y in categoria_higiene else
+                6 if y in categoria_frios else
+                7 if y in categoria_limpeza else
+                8 if y in categoria_hortifruti else -1)).
             assign(
-                DT_CADASTRO=lambda x: x.DT_CADASTRO.astype("datetime64"),
-                NO_PRODUTO=lambda x: x.NO_PRODUTO.astype(str),
-                FL_ATIVO=lambda x: x.FL_ATIVO.astype("int64"),
-                CD_CATEGORIA=lambda x: x.CD_CATEGORIA.astype("int64"))
+            DT_CADASTRO=lambda x: x.DT_CADASTRO.astype("datetime64"),
+            NO_PRODUTO=lambda x: x.NO_PRODUTO.astype(str),
+            FL_ATIVO=lambda x: x.FL_ATIVO.astype("int64"),
+            CD_CATEGORIA=lambda x: x.CD_CATEGORIA.astype("int64"))
     )
 
     return insert_record
@@ -197,13 +199,13 @@ def get_updated_produto(conn):
         conn_input=conn,
         sql_query=f'select * from "STAGES"."STAGE_PRODUTO"\
         order by "id_produto";').rename(
-            columns=columns_names).assign(
-            VL_PRECO_CUSTO=lambda x:
-            x.VL_PRECO_CUSTO.apply(lambda y:
-                                   float(y.replace(",", "."))),
-            VL_PERCENTUAL_LUCRO=lambda x:
-            x.VL_PERCENTUAL_LUCRO.apply(lambda y:
-                                        float(y.replace(",", "."))))
+        columns=columns_names).assign(
+        VL_PRECO_CUSTO=lambda x:
+        x.VL_PRECO_CUSTO.apply(lambda y:
+                               float(y.replace(",", "."))),
+        VL_PERCENTUAL_LUCRO=lambda x:
+        x.VL_PERCENTUAL_LUCRO.apply(lambda y:
+                                    float(y.replace(",", "."))))
 
     df_dw = get_data_from_database(
         conn_input=conn,
@@ -211,54 +213,51 @@ def get_updated_produto(conn):
         "CD_PRODUTO" > 0 order by "SK_PRODUTO";'
     )
 
-    #descobrindo quais linhas foram alteradas
+    # descobrindo quais linhas foram alteradas
     diference = (
         df_dw.filter(items=select_columns).
             compare(
-                df_stage.filter(items=select_columns),
-                align_axis=0,
-                keep_shape=False
+            df_stage.filter(items=select_columns),
+            align_axis=0,
+            keep_shape=False
         )
     )
 
-    #index das linha alteradas
+    # identificando index das linhas alteradas
     indexes = {x[0] for x in diference.index}
-
-    #extraindo colunas que serão atualizadas
-    updated_values = df_dw.loc[indexes]
-
-    #atribuindo as atualizações reconhecidas
-    updated_values[diference.columns] = diference.iloc[1][diference.columns]
-
     size = df_dw['SK_PRODUTO'].max() + 1
 
-    #atualizando a sequência das sk e cd
+    # extraindo linhas que serão atualizadas
     updated_values = (
-        updated_values.
-        assign(
-            SK_PRODUTO=lambda x: range(size, size + len(updated_values)),
-            CD_PRODUTO=lambda x: range(size, size + len(updated_values)),
-            DT_INICIO=lambda x: pd.to_datetime("today")
+        df_dw.loc[indexes].
+            assign(
+            VL_PRECO_CUSTO=lambda x: diference.
+                iloc[1]['VL_PRECO_CUSTO'],
+            VL_PERCENTUAL_LUCRO=diference.
+                iloc[1]['VL_PERCENTUAL_LUCRO']).
+            assign(
+            SK_PRODUTO=lambda x: range(size, size
+                                       + len(indexes)),
+            CD_PRODUTO=lambda x: range(size, size
+                                       + len(indexes)),
+            DT_INICIO=lambda x: pd.to_datetime("today"),
+            DT_FIM=lambda x: None,
+            FL_ATIVO=lambda x: 1
         )
     )
 
-    #atualizando as informações da slowly changing
-    update = (
-        df_dw.loc[indexes].assign(
-                FL_ATIVO=lambda x: 0,
-                DT_FIM=lambda x: pd.to_datetime("today"))
-    )
+    #identificando as sks que precisam ser atualizadas
+    set_to_update = list(df_dw['SK_PRODUTO'].loc[indexes])
 
-    df_dw.update(update)
+    print(pd.to_datetime("today"))
+    for sk in set_to_update:
+        sql = f'update "DW"."D_PRODUTO"\
+            set "FL_ATIVO" = {0},\
+            "DT_FIM" = \'{pd.to_datetime("today")}\'\
+            where "SK_PRODUTO" = {sk};'
+        conn.execute(sql)
 
-    #anexando as novas linhas no dataframe atualizado
-    df_dw = (
-        df_dw.
-            append(updated_values).
-            assign(DT_FIM=lambda x: x.DT_FIM.astype('datetime64'))
-    )
-    
-    return df_dw
+    return updated_values
 
 
 def load_new_produto(insert_record, conn):
@@ -282,14 +281,14 @@ def run_dim_produto(conn):
 def run_new_produto(conn):
     (
         insert_new_produto(conn).
-        pipe(load_new_produto, conn=conn)
+            pipe(load_new_produto, conn=conn)
     )
 
 
 def run_update_produto(conn):
     (
         get_updated_produto(conn).
-            pipe(load_dim_produto, conn=conn)
+        pipe(load_new_produto, conn=conn)
     )
 
 

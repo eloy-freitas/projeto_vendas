@@ -82,7 +82,7 @@ def treat_dim_produto(dim_produto):
                 8 if y in categoria_hortifruti else -1)).
             assign(
             DT_CADASTRO=lambda x: x.DT_CADASTRO.astype(str),
-            DT_INICIO= lambda x: x.DT_INICO.astype(str),
+            DT_INICIO= lambda x: x.DT_INICIO.astype(str),
             DT_FIM=lambda x: x.DT_FIM.astype(str),
             NO_PRODUTO=lambda x: x.NO_PRODUTO.astype(str),
             FL_ATIVO=lambda x: x.FL_ATIVO.astype("int64"),
@@ -238,8 +238,7 @@ def get_updated_produto(conn):
             assign(
             SK_PRODUTO=lambda x: range(size, size
                                        + len(indexes)),
-            CD_PRODUTO=lambda x: range(size, size
-                                       + len(indexes)),
+            CD_PRODUTO=lambda x: df_dw.loc[indexes]['CD_PRODUTO'],
             DT_INICIO=lambda x: pd.to_datetime("today"),
             DT_FIM=lambda x: None,
             FL_ATIVO=lambda x: 1
@@ -249,7 +248,6 @@ def get_updated_produto(conn):
     #identificando as sks que precisam ser atualizadas
     set_to_update = list(df_dw['SK_PRODUTO'].loc[indexes])
 
-    print(pd.to_datetime("today"))
     for sk in set_to_update:
         sql = f'update "DW"."D_PRODUTO"\
             set "FL_ATIVO" = {0},\

@@ -1,13 +1,15 @@
 import pandas as pd
 import time as t
 from CONEXAO import create_connection_postgre
-from tools import insert_data, get_data_from_database
+from tools import insert_data
+import DW_TOOLS as dwt
 
 
 def extract_dim_cliente(conn):
-    dim_cliente = get_data_from_database(
-        conn_input=conn,
-        sql_query=f'select * from "STAGES"."STAGE_CLIENTE";'
+    dim_cliente = dwt.read_table(
+        conn=conn,
+        schema="STAGES",
+        table_name="STAGE_CLIENTE",
     )
 
     return dim_cliente
@@ -21,9 +23,17 @@ def treat_dim_cliente(dim_cliente):
         "tel": "NU_TELEFONE",
         "id_endereco": "CD_ENDERECO_CLIENTE"
     }
+    select_columns = [
+        "id_cliente",
+        "nome",
+        "cpf",
+        "tel",
+        "id_endereco"
+    ]
 
     dim_cliente = (
         dim_cliente.
+        filter(select_columns).
         rename(columns=columns_name).
         assign(
             NU_TELEFONE=lambda x: x.NU_TELEFONE.apply(

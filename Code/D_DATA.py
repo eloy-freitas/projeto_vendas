@@ -2,13 +2,16 @@ import pandas as pd
 import datetime as dt
 import time as t
 from CONEXAO import create_connection_postgre
-from tools import insert_data, get_data_from_database
+from tools import insert_data
+import DW_TOOLS as dwt
 
 
 def extract_dim_data(conn):
-    dim_data = get_data_from_database(
-        conn_input=conn,
-        sql_query=f'select data_venda from "STAGES"."STAGE_VENDA";'
+    dim_data = dwt.read_table(
+        conn=conn,
+        schema="STAGES",
+        table_name="STAGE_VENDA",
+        columns=['data_venda']
     )
 
     return dim_data
@@ -19,8 +22,13 @@ def treat_dim_data(dim_data):
         "data_venda": "DT_REFERENCIA"
     }
 
+    select_columns = [
+        "data_venda"
+    ]
+
     dim_data = (
         dim_data.
+            filter(select_columns).
             rename(columns=columns_names).
             assign(
                 DT_REFERENCIA=lambda x: pd.to_datetime(x.DT_REFERENCIA),

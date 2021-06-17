@@ -2,13 +2,15 @@ import pandas as pd
 import datetime as dt
 import time as t
 from CONEXAO import create_connection_postgre
-from tools import insert_data, get_data_from_database
+from tools import insert_data
+import DW_TOOLS as dwt
 
 
 def extract_dim_endereco(conn):
-    dim_endereco = get_data_from_database(
-        conn_input=conn,
-        sql_query='select * from "STAGES"."STAGE_ENDERECO"'
+    dim_endereco = dwt.read_table(
+        conn=conn,
+        schema='STAGES',
+        table_name='STAGE_ENDERECO'
     )
 
     return dim_endereco
@@ -23,33 +25,38 @@ def treat_dim_endereco(dim_endereco):
         "rua": "DS_RUA"
     }
 
+    select_columns = [
+           "id_endereco",
+           "estado",
+           "cidade",
+           "bairro",
+           "rua"
+    ]
+
     dim_endereco = (
         dim_endereco.
-        rename(columns=columns_names).
-        assign(
+            filter(select_columns).
+            rename(columns=columns_names).
+            assign(
             DS_RUA=lambda x: x.DS_RUA.apply(
-                lambda y: y.strip()),
-            DT_INICIO=lambda x: dt.date(1900, 1, 1),
-            DT_FIM=lambda x: None,
-            FL_ATIVO=lambda x: 1
-        ).
-        assign(
-            DT_INICIO=lambda x: x.DT_INICIO.astype("datetime64")
+                lambda y: y.strip())
         )
     )
 
-    dim_endereco.insert(0,
-                        'SK_ENDERECO',
-                        range(1, 1 + len(dim_endereco)))
+    dim_endereco.insert(
+        loc=0,
+        column='SK_ENDERECO',
+        value=range(1, 1 + len(dim_endereco))
+    )
 
     dim_endereco = (
         pd.DataFrame([
-            [-1, -1, "Não informado", "Não informado", "Não informado", "Não informado", -1, -1, -1],
-            [-2, -2, "Não aplicável", "Não aplicável", "Não aplicável", "Não aplicável", -2, -2, -2],
-            [-3, -3, "Desconhecido", "Desconhecido", "Desconhecido", "Desconhecido", -3, -3, -3]
+            [-1, -1, "Não informado", "Não informado", "Não informado", "Não informado"],
+            [-2, -2, "Não aplicável", "Não aplicável", "Não aplicável", "Não aplicável"],
+            [-3, -3, "Desconhecido", "Desconhecido", "Desconhecido", "Desconhecido"]
         ], columns=dim_endereco.columns).append(dim_endereco)
     )
-    print(dim_endereco)
+
     return dim_endereco
 
 
@@ -66,8 +73,8 @@ def load_dim_endereco(dim_endereco, conn):
 def run_dim_endereco(conn):
     (
         extract_dim_endereco(conn).
-        pipe(treat_dim_endereco).
-        pipe(load_dim_endereco, conn=conn)
+            pipe(treat_dim_endereco).
+            pipe(load_dim_endereco, conn=conn)
     )
 
 

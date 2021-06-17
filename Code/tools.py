@@ -37,7 +37,11 @@ def merge_input(left, right, left_on, right_on, surrogate_key, suff):
 
 
 def get_data_from_database(conn_input, sql_query):
-    return pd.read_sql_query(sql=sql_query, con=conn_input)
+    return pd.read_sql_query(
+        sql=sql_query,
+        con=conn_input,
+        coerce_float=True
+    )
 
 
 # função que prenche uma tabela com seguimentos do dataframe

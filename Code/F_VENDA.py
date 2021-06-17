@@ -2,66 +2,78 @@ import time as t
 import pandas as pd
 from CONEXAO import create_connection_postgre
 from tools import insert_data, get_data_from_database, merge_input
+import DW_TOOLS as dwt
 
 
 def extract_fact_venda(conn):
-    stage_venda = get_data_from_database(
-        conn_input=conn,
-        sql_query=f'select id_venda, id_pagamento, id_cliente, \
-        id_func, id_loja, nfc, data_venda from "STAGES"."STAGE_VENDA";'
+    stage_venda = dwt.read_table(
+        conn=conn,
+        schema='STAGES',
+        table_name='STAGE_VENDA',
+        columns=['id_venda', 'id_pagamento', 'id_cliente',
+                 'id_func', 'id_loja', 'nfc', 'data_venda']
     )
 
-    stage_item_venda = get_data_from_database(
-        conn_input=conn,
-        sql_query=f'select * from "STAGES"."STAGE_ITEM_VENDA";'
+    stage_item_venda = dwt.read_table(
+        conn=conn,
+        schema='STAGES',
+        table_name='STAGE_ITEM_VENDA'
     )
 
-    dim_forma_pagamento = get_data_from_database(
-        conn_input=conn,
-        sql_query=f'select "SK_FORMA_PAGAMENTO","CD_FORMA_PAGAMENTO" \
-        from "DW"."D_FORMA_PAGAMENTO";'
+    dim_forma_pagamento = dwt.read_table(
+        conn=conn,
+        schema='DW',
+        table_name='D_FORMA_PAGAMENTO',
+        columns=["SK_FORMA_PAGAMENTO", "CD_FORMA_PAGAMENTO"]
     )
 
-    dim_cliente = get_data_from_database(
-        conn_input=conn,
-        sql_query=f'select "SK_CLIENTE", "CD_CLIENTE", "CD_ENDERECO_CLIENTE" \
-        from "DW"."D_CLIENTE";'
+    dim_cliente = dwt.read_table(
+        conn=conn,
+        schema='DW',
+        table_name='D_CLIENTE',
+        columns=["SK_CLIENTE", "CD_CLIENTE", "CD_ENDERECO_CLIENTE"]
     )
 
-    dim_funcionario = get_data_from_database(
-        conn_input=conn,
-        sql_query=f'select "SK_FUNCIONARIO", "CD_FUNCIONARIO"\
-        from "DW"."D_FUNCIONARIO";'
+    dim_funcionario = dwt.read_table(
+        conn=conn,
+        schema='DW',
+        table_name='D_FUNCIONARIO',
+        columns=["SK_FUNCIONARIO", "CD_FUNCIONARIO"]
     )
 
-    dim_loja = get_data_from_database(
-        conn_input=conn,
-        sql_query=f'select "SK_LOJA", "CD_LOJA", "CD_ENDERECO_LOJA" \
-        from "DW"."D_LOJA";'
+    dim_loja = dwt.read_table(
+        conn=conn,
+        schema='DW',
+        table_name='D_LOJA',
+        columns=["SK_LOJA", "CD_LOJA", "CD_ENDERECO_LOJA"]
     )
 
-    dim_data = get_data_from_database(
-        conn_input=conn,
-        sql_query=f'select * from "DW"."D_DATA";'
+    dim_data = dwt.read_table(
+        conn=conn,
+        schema='DW',
+        table_name='D_DATA'
     )
 
-    dim_produto = get_data_from_database(
-        conn_input=conn,
-        sql_query=f'select "SK_PRODUTO", "CD_PRODUTO", "CD_CATEGORIA",\
-        "VL_PRECO_CUSTO", "VL_PERCENTUAL_LUCRO"\
-        from "DW"."D_PRODUTO";'
+    dim_produto = dwt.read_table(
+        conn=conn,
+        schema='DW',
+        table_name='D_PRODUTO',
+        columns=["SK_PRODUTO", "CD_PRODUTO", "CD_CATEGORIA",
+                 "VL_PRECO_CUSTO", "VL_PERCENTUAL_LUCRO"]
     )
 
-    dim_endereco = get_data_from_database(
-        conn_input=conn,
-        sql_query=f'select "SK_ENDERECO", "CD_ENDERECO" \
-        from "DW"."D_ENDERECO";'
+    dim_endereco = dwt.read_table(
+        conn=conn,
+        schema='DW',
+        table_name='D_ENDERECO',
+        columns=["SK_ENDERECO", "CD_ENDERECO"]
     )
 
-    dim_categoria = get_data_from_database(
-        conn_input=conn,
-        sql_query=f'select "SK_CATEGORIA", "CD_CATEGORIA" \
-        from "DW"."D_CATEGORIA";'
+    dim_categoria = dwt.read_table(
+        conn=conn,
+        schema='DW',
+        table_name='D_CATEGORIA',
+        columns=["SK_CATEGORIA", "CD_CATEGORIA"]
     )
 
     fact_venda = (
@@ -157,9 +169,9 @@ def treat_fact_venda(fact_tbl):
         fact_tbl.
             rename(columns=columns_names).
             assign(
-                SK_CLIENTE=lambda x: x.SK_CLIENTE.astype('int64'),
-                VL_BRUTO=lambda x: x.VL_PRECO_CUSTO * x.QTD_PRODUTO,
-                VL_LIQUIDO=lambda x:x.VL_BRUTO * x.VL_PERCENTUAL_LUCRO).
+            SK_CLIENTE=lambda x: x.SK_CLIENTE.astype('int64'),
+            VL_BRUTO=lambda x: x.VL_PRECO_CUSTO * x.QTD_PRODUTO,
+            VL_LIQUIDO=lambda x: x.VL_BRUTO * x.VL_PERCENTUAL_LUCRO).
             filter(columns_select)
     )
 

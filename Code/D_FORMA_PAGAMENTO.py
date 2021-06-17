@@ -1,13 +1,14 @@
 import pandas as pd
 import time as t
 from CONEXAO import create_connection_postgre
-from tools import insert_data, get_data_from_database
-
+from tools import insert_data
+import DW_TOOLS as dwt
 
 def extract_dim_forma_pagamento(conn):
-    dim_forma_pagamento = get_data_from_database(
-        conn_input=conn,
-        sql_query=f'select * from "STAGES"."STAGE_FORMA_PAGAMENTO"'
+    dim_forma_pagamento = dwt.read_table(
+        conn=conn,
+        schema="STAGES",
+        table_name="STAGE_FORMA_PAGAMENTO"
     )
 
     return dim_forma_pagamento
@@ -20,8 +21,15 @@ def treat_dim_forma_pagamento(dim_forma_pagamento):
         "descricao": "DS_FORMA_PAGAMENTO"
     }
 
+    select_columns = [
+        "id_pagamento",
+        "nome",
+         "descricao"
+    ]
+
     dim_forma_pagamento = (
         dim_forma_pagamento.
+            filter(select_columns).
             rename(columns=columns_names).
             assign(DS_FORMA_PAGAMENTO=lambda x: x.DS_FORMA_PAGAMENTO.
                    apply(lambda y:

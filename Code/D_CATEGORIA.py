@@ -21,15 +21,15 @@ def treat_dim_categoria():
     )
 
     dim_categoria.insert(
-        0,
-        'SK_CATEGORIA',
-        range(1, 1 + len(dim_categoria))
+        loc=0,
+        column='SK_CATEGORIA',
+        value=range(1, 1 + len(dim_categoria))
     )
 
     dim_categoria.insert(
-        1,
-        'CD_CATEGORIA',
-        range(1, 1 + len(dim_categoria))
+        loc=1,
+        column='CD_CATEGORIA',
+        value=range(1, 1 + len(dim_categoria))
     )
 
     dim_categoria = (
@@ -56,7 +56,7 @@ def load_dim_categoria(dim_categoria, conn):
 def run_dim_categoria(conn):
     (
         treat_dim_categoria().
-        pipe(load_dim_categoria, conn=conn)
+            pipe(load_dim_categoria, conn=conn)
     )
 
 

@@ -2,12 +2,14 @@ import pandas as pd
 import time as t
 from CONEXAO import create_connection_postgre
 from tools import insert_data, get_data_from_database
+import DW_TOOLS as dwt
 
 
 def extract_dim_funcionario(conn):
-    dim_funcionario = get_data_from_database(
-        conn_input=conn,
-        sql_query=f'select * from "STAGES"."STAGE_FUNCIONARIO";'
+    dim_funcionario = dwt.read_table(
+        conn=conn,
+        schema='STAGES',
+        table_name='STAGE_FUNCIONARIO'
     )
 
     return dim_funcionario
@@ -22,8 +24,17 @@ def treat_dim_funcionario(dim_funcionario):
         "data_nascimento": "DT_NASCIMENTO"
     }
 
+    select_columns = [
+        "id_funcionario",
+        "nome",
+        "cpf",
+        "tel",
+        "data_nascimento"
+    ]
+
     dim_funcionario = (
         dim_funcionario.
+        filter(select_columns).
         rename(columns=columns_names).
         assign(
             DT_NASCIMENTO=lambda x: x.DT_NASCIMENTO.astype('datetime64'))

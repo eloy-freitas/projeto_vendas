@@ -2,29 +2,41 @@ import pandas as pd
 import datetime as dt
 import time as t
 from CONEXAO import create_connection_postgre
-from tools import insert_data, get_data_from_database
+from tools import insert_data
+import DW_TOOLS as dwt
 
-columns_names = {"id_loja": "CD_LOJA",
-                 "nome_loja": "NO_LOJA",
-                 "razao_social": "DS_RAZAO_SOCIAL",
-                 "cnpj": "NU_CNPJ",
-                 "telefone": "NU_TELEFONE",
-                 "id_endereco": "CD_ENDERECO_LOJA"
-                 }
+columns_names = {
+    "id_loja": "CD_LOJA",
+    "nome_loja": "NO_LOJA",
+    "razao_social": "DS_RAZAO_SOCIAL",
+    "cnpj": "NU_CNPJ",
+    "telefone": "NU_TELEFONE",
+    "id_endereco": "CD_ENDERECO_LOJA"
+}
 
 
 def extract_dim_loja(conn):
-    dim_loja = get_data_from_database(
-        conn_input=conn,
-        sql_query=f'select * from "STAGES"."STAGE_LOJA";'
+    dim_loja = dwt.read_table(
+        conn=conn,
+        schema='STAGES',
+        table_name='STAGE_LOJA'
     )
-
     return dim_loja
 
 
 def treat_dim_loja(dim_loja):
+    select_columns = [
+        "id_loja",
+        "nome_loja",
+        "razao_social",
+        "cnpj",
+        "telefone",
+        "id_endereco"
+    ]
+
     dim_loja = (
         dim_loja.
+            filter(select_columns).
             rename(columns=columns_names).
             assign(
             CD_LOJA=lambda x: x.CD_LOJA.astype("int64"),
@@ -58,19 +70,22 @@ def get_updated_loja(conn):
         "CD_ENDERECO_LOJA"
     }
 
-    #extraindo os dados da stage
-    df_stage = get_data_from_database(
-        conn_input=conn,
-        sql_query=f'select * from "STAGES"."STAGE_LOJA";'
+    # extraindo os dados da stage
+    df_stage = dwt.read_table(
+        conn=conn,
+        schema='STAGES',
+        table_name='STAGE_LOJA'
     ).rename(columns=columns_names)
 
-    #extraindo os dados do dw
-    df_dw = get_data_from_database(
-        conn_input=conn,
-        sql_query=f'select * from "DW"."D_LOJA" where "SK_LOJA" > 0;'
+    # extraindo os dados do dw
+    df_dw = dwt.read_table(
+        conn=conn,
+        schema='DW',
+        table_name='D_LOJA',
+        where='"SK_LOJA" > 0'
     )
 
-    #fazendo a diferença da stage com o dw, para saber os dados que atualizaram
+    # fazendo a diferença da stage com o dw, para saber os dados que atualizaram
     diference = (
         df_dw.
             filter(items=select_columns).
@@ -80,14 +95,14 @@ def get_updated_loja(conn):
                     )
     )
 
-    #identificando os indexes que foram alterados
+    # identificando os indexes que foram alterados
     indexes = {x[0] for x in diference.index}
     size = df_dw['SK_LOJA'].max() + 1
 
-    #extraindo as linhas que foram alteradas e padronizando os dados
+    # extraindo as linhas que foram alteradas e padronizando os dados
     updated_values = (
         df_dw.loc[indexes].
-        assign(
+            assign(
             SK_LOJA=lambda x: range(size, size
                                     + len(indexes)),
             CD_LOJA=lambda x: df_dw.loc[indexes]['CD_LOJA'],
@@ -97,14 +112,14 @@ def get_updated_loja(conn):
         )
     )
 
-    #atualizando cada coluna que foi atualizada
+    # atualizando cada coluna que foi atualizada
     for c in diference.columns:
         updated_values[c] = diference.iloc[1][c]
 
-    #identificando as sk que foram alteradas
+    # identificando as sk que foram alteradas
     set_to_update = list(df_dw['SK_LOJA'].loc[indexes])
 
-    #atualizando a flag e data_fim dos dados atualizados
+    # atualizando a flag e data_fim dos dados atualizados
     for sk in set_to_update:
         sql = f'update "DW"."D_LOJA"\
             set "FL_ATIVO" = {0},\

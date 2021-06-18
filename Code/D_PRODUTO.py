@@ -1,3 +1,4 @@
+
 import pandas as pd
 import datetime as dt
 import time as t
@@ -83,21 +84,21 @@ def treat_dim_produto(dim_produto):
             assign(
             CD_CATEGORIA=lambda x: x.NO_PRODUTO.map(
                 lambda y:
-                1 if y in categoria_cafe_manha else
-                2 if y in categoria_mercearia else
-                3 if y in categoria_carnes else
-                4 if y in categoria_bebidas else
-                5 if y in categoria_higiene else
-                6 if y in categoria_frios else
-                7 if y in categoria_limpeza else
-                8 if y in categoria_hortifruti else -1)).
+                "Café da manhã" if y in categoria_cafe_manha else
+                "Mercearia" if y in categoria_mercearia else
+                "Carnes" if y in categoria_carnes else
+                "Bebidas" if y in categoria_bebidas else
+                "Higiene" if y in categoria_higiene else
+                "Frios" if y in categoria_frios else
+                "Limpeza" if y in categoria_limpeza else
+                "Hortifruti" if y in categoria_hortifruti else
+                "Desconhecido")).
             assign(
             DT_CADASTRO=lambda x: x.DT_CADASTRO.astype(str),
             DT_INICIO=lambda x: x.DT_INICIO.astype(str),
             DT_FIM=lambda x: x.DT_FIM.astype(str),
             NO_PRODUTO=lambda x: x.NO_PRODUTO.astype(str),
-            FL_ATIVO=lambda x: x.FL_ATIVO.astype("int64"),
-            CD_CATEGORIA=lambda x: x.CD_CATEGORIA.astype("int64"))
+            FL_ATIVO=lambda x: x.FL_ATIVO.astype("int64"))
     )
 
     dim_produto.insert(0, 'SK_PRODUTO', range(1, 1 + len(dim_produto)))
@@ -186,18 +187,18 @@ def get_new_produto(conn):
             assign(
             CD_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
                 lambda y:
-                1 if y in categoria_cafe_manha else
-                2 if y in categoria_mercearia else
-                3 if y in categoria_carnes else
-                4 if y in categoria_bebidas else
-                5 if y in categoria_higiene else
-                6 if y in categoria_frios else
-                7 if y in categoria_limpeza else
-                8 if y in categoria_hortifruti else -1)).
+                "Café da manhã" if y in categoria_cafe_manha else
+                "Mercearia" if y in categoria_mercearia else
+                "Carnes" if y in categoria_carnes else
+                "Bebidas" if y in categoria_bebidas else
+                "Higiene" if y in categoria_higiene else
+                "Frios" if y in categoria_frios else
+                "Limpeza" if y in categoria_limpeza else
+                "Hortifruti" if y in categoria_hortifruti else
+                "Desconhecido")).
             assign(
             DT_CADASTRO=lambda x: x.DT_CADASTRO.astype("datetime64"),
-            NO_PRODUTO=lambda x: x.NO_PRODUTO.astype(str),
-            CD_CATEGORIA=lambda x: x.CD_CATEGORIA.astype("int64"))
+            NO_PRODUTO=lambda x: x.NO_PRODUTO.astype(str))
 
     )
 
@@ -216,7 +217,8 @@ def get_updated_produto(conn):
         dwt.read_table(
             conn=conn,
             schema='STAGES',
-            table_name='STAGE_PRODUTO').
+            table_name='STAGE_PRODUTO',
+            where='id_produto > 0 order by id_produto').
             rename(columns=columns_names).
             assign(
             VL_PRECO_CUSTO=lambda x:
@@ -243,7 +245,7 @@ def get_updated_produto(conn):
                     keep_shape=False
                     )
     )
-
+    print(diference)
     # identificando index das linhas alteradas
     indexes = {x[0] for x in diference.index}
     size = df_dw['SK_PRODUTO'].max() + 1
@@ -265,13 +267,13 @@ def get_updated_produto(conn):
         updated_values[c] = diference.iloc[1][c]
 
     # identificando as sks que precisam ser atualizadas
-    set_to_update = list(df_dw['SK_PRODUTO'].loc[indexes])
+    set_to_update = list(df_dw['CD_PRODUTO'].loc[indexes])
 
     for sk in set_to_update:
         sql = f'update "DW"."D_PRODUTO"\
             set "FL_ATIVO" = {0},\
             "DT_FIM" = \'{pd.to_datetime("today")}\'\
-            where "SK_PRODUTO" = {sk};'
+            where "CD_PRODUTO" = {sk};'
         conn.execute(sql)
 
     return updated_values
@@ -320,7 +322,7 @@ if __name__ == "__main__":
 
     start = t.time()
     #run_dim_produto(conn_dw)
-    run_new_produto(conn_dw)
-    #run_update_produto(conn_dw)
+    #run_new_produto(conn_dw)
+    run_update_produto(conn_dw)
     exec_time = t.time() - start
     print(f"exec_time = {exec_time}")

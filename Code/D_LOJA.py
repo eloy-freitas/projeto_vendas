@@ -30,8 +30,7 @@ def treat_dim_loja(dim_loja):
         "nome_loja",
         "razao_social",
         "cnpj",
-        "telefone",
-        "id_endereco"
+        "telefone"
     ]
 
     dim_loja = (
@@ -39,21 +38,19 @@ def treat_dim_loja(dim_loja):
             filter(select_columns).
             rename(columns=columns_names).
             assign(
-            CD_LOJA=lambda x: x.CD_LOJA.astype("int64"),
-            CD_ENDERECO_LOJA=lambda x: x.CD_ENDERECO_LOJA.astype("int64"),
-            FL_ATIVO=lambda x: 1,
-            DT_INICIO=lambda x: dt.date(1900, 1, 1),
-            DT_FIM=lambda x: str(None)
-        )
+                CD_LOJA=lambda x: x.CD_LOJA.astype("int64"),
+                FL_ATIVO=lambda x: 1,
+                DT_INICIO=lambda x: dt.date(1900, 1, 1),
+                DT_FIM=lambda x: str(None))
     )
 
     dim_loja.insert(0, 'SK_LOJA', range(1, 1 + len(dim_loja)))
 
     dim_loja = (
         pd.DataFrame([
-            [-1, -1, "Não informado", "Não informado", -1, -1, -1, -1, -1, -1],
-            [-2, -2, "Não aplicável", "Não aplicável", -2, -2, -2, -2, -2, -2],
-            [-3, -3, "Desconhecido", "Desconhecido", -3, -3, -3, -3, -3, -3]
+            [-1, -1, "Não informado", "Não informado", -1, -1, -1, -1, -1],
+            [-2, -2, "Não aplicável", "Não aplicável", -2, -2, -2, -2, -2],
+            [-3, -3, "Desconhecido", "Desconhecido", -3, -3, -3, -3, -3]
         ], columns=dim_loja.columns).append(dim_loja)
     )
 
@@ -175,7 +172,7 @@ if __name__ == "__main__":
     )
 
     start = t.time()
-    run_updated_loja(conn_dw)
-    #run_dim_loja(conn_dw)
+    #run_updated_loja(conn_dw)
+    run_dim_loja(conn_dw)
     exec_time = t.time() - start
     print(f"exec_time = {exec_time}")

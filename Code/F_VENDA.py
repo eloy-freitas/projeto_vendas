@@ -27,11 +27,35 @@ def extract_fact_venda(conn):
         columns=["SK_FORMA_PAGAMENTO", "CD_FORMA_PAGAMENTO"]
     )
 
+    dim_endereco = dwt.read_table(
+        conn=conn,
+        schema='DW',
+        table_name='D_ENDERECO',
+        columns=["SK_ENDERECO", "CD_ENDERECO"]
+    )
+
+    stage_cliente = dwt.read_table(
+        conn=conn,
+        schema='STAGES',
+        table_name='STAGE_CLIENTE',
+        columns=['id_cliente', 'id_endereco']
+    )
+
     dim_cliente = dwt.read_table(
         conn=conn,
         schema='DW',
         table_name='D_CLIENTE',
-        columns=["SK_CLIENTE", "CD_CLIENTE", "CD_ENDERECO_CLIENTE"]
+        columns=["SK_CLIENTE", "CD_CLIENTE"]
+    ).merge(
+        right=stage_cliente,
+        left_on='CD_CLIENTE',
+        right_on='id_cliente',
+        how='left'
+    ).merge(
+        right=dim_endereco,
+        left_on='id_endereco',
+        right_on='CD_ENDERECO',
+        how='left'
     )
 
     dim_funcionario = dwt.read_table(
@@ -41,11 +65,28 @@ def extract_fact_venda(conn):
         columns=["SK_FUNCIONARIO", "CD_FUNCIONARIO"]
     )
 
+    stage_loja = dwt.read_table(
+        conn=conn,
+        schema='STAGES',
+        table_name='STAGE_LOJA',
+        columns=['id_loja', 'id_endereco']
+    )
+
     dim_loja = dwt.read_table(
         conn=conn,
         schema='DW',
         table_name='D_LOJA',
-        columns=["SK_LOJA", "CD_LOJA", "CD_ENDERECO_LOJA"]
+        columns=["SK_LOJA", "CD_LOJA"]
+    ).merge(
+        right=stage_loja,
+        left_on='CD_LOJA',
+        right_on='id_loja',
+        how='left'
+    ).merge(
+        right=dim_endereco,
+        left_on='id_endereco',
+        right_on='CD_ENDERECO',
+        how='left'
     )
 
     dim_data = dwt.read_table(
@@ -60,20 +101,6 @@ def extract_fact_venda(conn):
         table_name='D_PRODUTO',
         columns=["SK_PRODUTO", "CD_PRODUTO", "CD_CATEGORIA",
                  "VL_PRECO_CUSTO", "VL_PERCENTUAL_LUCRO"]
-    )
-
-    dim_endereco = dwt.read_table(
-        conn=conn,
-        schema='DW',
-        table_name='D_ENDERECO',
-        columns=["SK_ENDERECO", "CD_ENDERECO"]
-    )
-
-    dim_categoria = dwt.read_table(
-        conn=conn,
-        schema='DW',
-        table_name='D_CATEGORIA',
-        columns=["SK_CATEGORIA", "CD_CATEGORIA"]
     )
 
     fact_venda = (
@@ -118,23 +145,7 @@ def extract_fact_venda(conn):
                  left_on="id_produto",
                  right_on="CD_PRODUTO",
                  suff=["_13", "_14"],
-                 surrogate_key="SK_PRODUTO").
-            pipe(pd.merge,
-                 right=dim_endereco,
-                 left_on="CD_ENDERECO_LOJA",
-                 right_on="CD_ENDERECO",
-                 suffixes=["_15", "_16"]).
-            pipe(pd.merge,
-                 right=dim_endereco,
-                 left_on="CD_ENDERECO_CLIENTE",
-                 right_on="CD_ENDERECO",
-                 suffixes=["_17", "_18"]).
-            pipe(merge_input,
-                 right=dim_categoria,
-                 left_on="CD_CATEGORIA",
-                 right_on="CD_CATEGORIA",
-                 suff=["_19", "_20"],
-                 surrogate_key="SK_CATEGORIA")
+                 surrogate_key="SK_PRODUTO")
     )
 
     return fact_venda
@@ -145,8 +156,8 @@ def treat_fact_venda(fact_tbl):
         "nfc": "NU_NFC",
         "qtd_produto": "QTD_PRODUTO",
         "SK_DATA": "SK_DT_VENDA",
-        "SK_ENDERECO_17": "SK_ENDERECO_LOJA",
-        "SK_ENDERECO_18": "SK_ENDERECO_CLIENTE"
+        "SK_ENDERECO_08": "SK_ENDERECO_LOJA",
+        "SK_ENDERECO_07": "SK_ENDERECO_CLIENTE"
     }
 
     columns_select = [
@@ -171,18 +182,24 @@ def treat_fact_venda(fact_tbl):
             assign(
             SK_CLIENTE=lambda x: x.SK_CLIENTE.astype('int64'),
             VL_BRUTO=lambda x: x.VL_PRECO_CUSTO * x.QTD_PRODUTO,
-            VL_LIQUIDO=lambda x: x.VL_BRUTO * x.VL_PERCENTUAL_LUCRO).
+            VL_LIQUIDO=lambda x: x.VL_BRUTO
+                                 * x.VL_PERCENTUAL_LUCRO,
+            SK_ENDERECO_CLIENTE=lambda x: x.SK_ENDERECO_CLIENTE.apply(
+                lambda y: -3 if pd.isna(y) else y),
+            SK_ENDERECO_LOJA=lambda x: x.SK_ENDERECO_LOJA.apply(
+                lambda y: -3 if pd.isna(y) else y)
+        ).
             filter(columns_select)
     )
 
     fact_venda = (
         pd.DataFrame([
-            [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-            [-2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2],
-            [-3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3]
+            [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+            [-2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2],
+            [-3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3]
         ], columns=fact_venda.columns).append(fact_venda)
     )
-
+    
     return fact_venda
 
 

@@ -1,57 +1,32 @@
 import pandas as pd
-import datetime as dt
 import time as t
 from CONEXAO import create_connection_postgre
 from tools import insert_data
-import DW_TOOLS as dwt
 
 
-def extract_dim_data(conn):
-    dim_data = dwt.read_table(
-        conn=conn,
-        schema="STAGES",
-        table_name="STAGE_VENDA",
-        columns=['data_venda']
-    )
-
-    return dim_data
-
-
-def treat_dim_data(dim_data):
-    columns_names = {
-        "data_venda": "DT_REFERENCIA"
-    }
-
+def treat_dim_data():
     select_columns = [
-        "data_venda"
+        "DT_REFERENCIA"
     ]
 
-    dim_data = (
-        dim_data.
-            filter(select_columns).
-            rename(columns=columns_names).
-            assign(
-                DT_REFERENCIA=lambda x: pd.to_datetime(x.DT_REFERENCIA),
-                DS_TURNO=lambda x: x.DT_REFERENCIA.map(lambda y: y.time())).
-            assign(
-            DS_TURNO=lambda x: x.DS_TURNO.apply(
-                lambda y:
-                "Manhã" if dt.time(6, 0) < y < dt.time(11, 59) else
-                "Tarde" if dt.time(12, 0) < y < dt.time(17, 59) else
-                "Noite" if dt.time(18, 0) < y < dt.time(23,59) else
-                "Madrugada" if dt.time(0, 0) < y < dt.time(5, 59) else
-                "Não informado"
-            )
-        )
+    data = pd.date_range(
+                start='2020-01-01',
+                end='2030-01-01',
+                freq='D')
+
+    dim_data = pd.DataFrame(
+        data=data,
+        columns=select_columns).assign(
+        DT_REFERENCIA=lambda x: x.DT_REFERENCIA.dt.date
     )
 
     dim_data.insert(0, 'SK_DATA', range(1, 1 + len(dim_data)))
 
     dim_data = (
         pd.DataFrame([
-            [-1, "Não informado", "Não informado"],
-            [-2, "Não aplicável", "Não aplicável"],
-            [-3, "Desconhecido", "Desconhecido"]
+            [-1, -1],
+            [-2, -2],
+            [-3, -3]
         ], columns=dim_data.columns).append(dim_data)
     )
 
@@ -59,19 +34,19 @@ def treat_dim_data(dim_data):
 
 
 def load_dim_data(dim_data, conn):
-    insert_data(
-        data=dim_data,
-        connection=conn,
-        table_name='D_DATA',
-        schema_name='DW',
-        action='replace'
+    dim_data.to_sql(
+        con=conn,
+        name='D_DATA',
+        schema='DW',
+        if_exists='replace',
+        index=False,
+        chunksize=100
     )
 
 
 def run_dim_data(conn):
     (
-        extract_dim_data(conn).
-            pipe(treat_dim_data).
+        treat_dim_data().
             pipe(load_dim_data, conn=conn)
     )
 

@@ -12,6 +12,10 @@ def extract_fact_venda(conn):
         table_name='STAGE_VENDA',
         columns=['id_venda', 'id_pagamento', 'id_cliente',
                  'id_func', 'id_loja', 'nfc', 'data_venda']
+    ).assign(
+        data_de_venda=lambda x: pd.to_datetime(x.data_venda).dt.date
+    ).assign(
+        data_de_venda=lambda x: x.data_de_venda.astype(str)
     )
 
     stage_item_venda = dwt.read_table(
@@ -131,7 +135,7 @@ def extract_fact_venda(conn):
                  surrogate_key="SK_LOJA").
             pipe(merge_input,
                  right=dim_data,
-                 left_on="data_venda",
+                 left_on="data_de_venda",
                  right_on="DT_REFERENCIA",
                  suff=["_09", "_10"],
                  surrogate_key="SK_DATA").

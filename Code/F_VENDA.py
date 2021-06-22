@@ -13,9 +13,9 @@ def extract_fact_venda(conn):
         columns=['id_venda', 'id_pagamento', 'id_cliente',
                  'id_func', 'id_loja', 'nfc', 'data_venda']
     ).assign(
-        data_de_venda=lambda x: pd.to_datetime(x.data_venda).dt.date
-    ).assign(
-        data_de_venda=lambda x: x.data_de_venda.astype(str)
+        data_venda=lambda x: x.data_venda.apply(
+            lambda y: y[:13]
+        )
     )
 
     stage_item_venda = dwt.read_table(
@@ -96,7 +96,12 @@ def extract_fact_venda(conn):
     dim_data = dwt.read_table(
         conn=conn,
         schema='DW',
-        table_name='D_DATA'
+        table_name='D_DATA',
+        columns=['SK_DATA', 'DT_REFERENCIA']
+    ).assign(
+        DT_REFERENCIA=lambda x: x.DT_REFERENCIA.apply(
+            lambda y: y[:13]
+        )
     )
 
     dim_produto = dwt.read_table(
@@ -109,6 +114,12 @@ def extract_fact_venda(conn):
 
     fact_venda = (
         stage_venda.
+            pipe(merge_input,
+                 right=dim_data,
+                 left_on="data_venda",
+                 right_on="DT_REFERENCIA",
+                 suff=['_16', '_17'],
+                 surrogate_key='SK_DATA').
             pipe(merge_input,
                  right=dim_forma_pagamento,
                  left_on="id_pagamento",
@@ -133,12 +144,6 @@ def extract_fact_venda(conn):
                  right_on="CD_LOJA",
                  suff=["_07", "_08"],
                  surrogate_key="SK_LOJA").
-            pipe(merge_input,
-                 right=dim_data,
-                 left_on="data_de_venda",
-                 right_on="DT_REFERENCIA",
-                 suff=["_09", "_10"],
-                 surrogate_key="SK_DATA").
             pipe(pd.merge,
                  right=stage_item_venda,
                  left_on="id_venda",
@@ -191,8 +196,7 @@ def treat_fact_venda(fact_tbl):
             SK_ENDERECO_CLIENTE=lambda x: x.SK_ENDERECO_CLIENTE.apply(
                 lambda y: -3 if pd.isna(y) else y),
             SK_ENDERECO_LOJA=lambda x: x.SK_ENDERECO_LOJA.apply(
-                lambda y: -3 if pd.isna(y) else y)
-        ).
+                lambda y: -3 if pd.isna(y) else y)).
             filter(columns_select)
     )
 
@@ -203,25 +207,26 @@ def treat_fact_venda(fact_tbl):
             [-3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3]
         ], columns=fact_venda.columns).append(fact_venda)
     )
-    print(fact_venda)
+
     return fact_venda
 
 
 def load_fact_venda(fact_venda, conn):
-    insert_data(
-        data=fact_venda,
-        connection=conn,
-        table_name='F_VENDA',
-        schema_name="DW",
-        action='replace'
+    fact_venda.to_sql(
+        con=conn,
+        name='F_VENDA',
+        schema="DW",
+        if_exists='replace',
+        chunksize=100,
+        index=False
     )
 
 
 def run_fact_venda(conn):
     (
         extract_fact_venda(conn).
-            pipe(treat_fact_venda)#.
-            #pipe(load_fact_venda, conn=conn)
+            pipe(treat_fact_venda).
+            pipe(load_fact_venda, conn=conn)
     )
 
 

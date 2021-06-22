@@ -29,8 +29,7 @@ def treat_dim_data():
             "Manhã" if 6 <= y < 12 else
             "Tarde" if 12 <= y < 18 else
             "Noite" if 18 <= y < 24 else
-            "Madrugada"),
-        DT_REFERENCIA=lambda x: x.DT_REFERENCIA.dt.date
+            "Madrugada")
     )
 
     dim_data.insert(0, 'SK_DATA', range(1, 1 + len(dim_data)))

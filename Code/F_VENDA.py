@@ -203,7 +203,7 @@ def treat_fact_venda(fact_tbl):
             [-3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3]
         ], columns=fact_venda.columns).append(fact_venda)
     )
-    
+    print(fact_venda)
     return fact_venda
 
 
@@ -220,8 +220,8 @@ def load_fact_venda(fact_venda, conn):
 def run_fact_venda(conn):
     (
         extract_fact_venda(conn).
-            pipe(treat_fact_venda).
-            pipe(load_fact_venda, conn=conn)
+            pipe(treat_fact_venda)#.
+            #pipe(load_fact_venda, conn=conn)
     )
 
 

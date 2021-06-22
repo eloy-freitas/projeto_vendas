@@ -11,12 +11,25 @@ def treat_dim_data():
 
     data = pd.date_range(
                 start='2020-01-01',
-                end='2030-01-01',
-                freq='D')
+                end='2023-01-01',
+                freq='H')
 
     dim_data = pd.DataFrame(
         data=data,
         columns=select_columns).assign(
+        DT_ANO=lambda x: x.DT_REFERENCIA.dt.year,
+        DT_MES=lambda x: x.DT_REFERENCIA.dt.month,
+        DT_TRIMESTE=lambda x: x.DT_REFERENCIA.dt.quarter,
+        DT_DIA=lambda x: x.DT_REFERENCIA.dt.day,
+        DT_SEMANA=lambda x: x.DT_REFERENCIA.dt.isocalendar().week,
+        DS_DIA_SEMANA=lambda x: x.DT_REFERENCIA.dt.day_name(),
+        DT_HORA=lambda x: x.DT_REFERENCIA.dt.hour,
+        DS_TURNO=lambda x: x.DT_HORA.apply(
+            lambda y:
+            "Manhã" if 6 <= y < 12 else
+            "Tarde" if 12 <= y < 18 else
+            "Noite" if 18 <= y < 24 else
+            "Madrugada"),
         DT_REFERENCIA=lambda x: x.DT_REFERENCIA.dt.date
     )
 
@@ -24,9 +37,9 @@ def treat_dim_data():
 
     dim_data = (
         pd.DataFrame([
-            [-1, -1],
-            [-2, -2],
-            [-3, -3]
+            [-1, -1, -1, -1, -1, -1, -1, "Não informado", -1, "Não informado"],
+            [-2, -2, -2, -2, -2, -2, -2, "Não aplicável", -2, "Não aplicável"],
+            [-3, -3, -3, -3, -3, -3, -3, "Desconhecido", -3, "Desconhecido"]
         ], columns=dim_data.columns).append(dim_data)
     )
 

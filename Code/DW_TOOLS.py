@@ -13,15 +13,14 @@ def merge_input(left, right, left_on, right_on, surrogate_key, suff):
     return df
 
 
-def create_stage(path, delimiter, conn_output, stg_name, where=None):
+def create_stage(conn_input, conn_output, schema_in, table, stg_name, tbl_exists):
     (
-        pd.read_csv(path,
-                    sep=delimiter,
-                    low_memory=False).to_sql(name=stg_name,
-                                             con=conn_output,
-                                             schema="STAGE",
-                                             if_exists="replace",
-                                             index=False)
+        read_table(conn=conn_input, schema=schema_in, table_name=table).
+            to_sql(name=stg_name,
+                   con=conn_output,
+                   schema="STAGE",
+                   if_exists=tbl_exists,
+                   index=False)
     )
 
 

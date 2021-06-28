@@ -51,7 +51,7 @@ categoria_hortifruti = {"ALFACE", "CEBOLA", "ALHO", "TOMATE",
 def extract_dim_produto(conn):
     dim_produto = dwt.read_table(
         conn=conn,
-        schema='STAGES',
+        schema='STAGE',
         table_name='STAGE_PRODUTO'
     )
 
@@ -115,12 +115,13 @@ def treat_dim_produto(dim_produto):
 
 
 def load_dim_produto(dim_produto, conn):
-    insert_data(
-        data=dim_produto,
-        connection=conn,
-        table_name='D_PRODUTO',
-        schema_name='DW',
-        action='replace'
+    dim_produto.to_sql(
+        con=conn,
+        name='D_PRODUTO',
+        schema='DW',
+        if_exists='replace',
+        index=False,
+        chunksize=100
     )
 
 
@@ -128,7 +129,7 @@ def get_new_produto(conn):
     df_stage = (
             dwt.read_table(
                 conn=conn,
-                schema='STAGES',
+                schema='STAGE',
                 table_name='STAGE_PRODUTO').
             assign(
             preco_custo=lambda x: x.preco_custo.apply(
@@ -216,7 +217,7 @@ def get_updated_produto(conn):
     df_stage = (
         dwt.read_table(
             conn=conn,
-            schema='STAGES',
+            schema='STAGE',
             table_name='STAGE_PRODUTO',
             where='id_produto > 0 order by id_produto').
             rename(columns=columns_names).
@@ -280,13 +281,14 @@ def get_updated_produto(conn):
 
 
 def load_new_produto(insert_record, conn):
-    insert_data(
-        data=insert_record,
-        connection=conn,
-        schema_name="DW",
-        table_name="D_PRODUTO",
-        action='append'
-    )
+    insert_record.to_sql(
+        con=conn,
+        name='D_PRODUTO',
+        schema='DW',
+        if_exists='append',
+        index=False,
+        chunksize=100
+    )   
 
 
 def run_dim_produto(conn):

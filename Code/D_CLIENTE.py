@@ -8,7 +8,7 @@ import DW_TOOLS as dwt
 def extract_dim_cliente(conn):
     dim_cliente = dwt.read_table(
         conn=conn,
-        schema="STAGES",
+        schema="STAGE",
         table_name="STAGE_CLIENTE",
     )
 
@@ -32,13 +32,13 @@ def treat_dim_cliente(dim_cliente):
 
     dim_cliente = (
         dim_cliente.
-        filter(select_columns).
-        rename(columns=columns_name).
-        assign(
+            filter(select_columns).
+            rename(columns=columns_name).
+            assign(
             NU_TELEFONE=lambda x: x.NU_TELEFONE.apply(
                 lambda y: y[0:8] + y[-5:]
             )).
-        assign(
+            assign(
             CD_CLIENTE=lambda x: x.CD_CLIENTE.astype('int64')
         )
     )
@@ -57,14 +57,21 @@ def treat_dim_cliente(dim_cliente):
 
 
 def load_dim_cliente(dim_cliente, conn):
-    insert_data(dim_cliente, conn, 'D_CLIENTE', 'DW', 'replace')
+    dim_cliente.to_sql(
+        con=conn,
+        name='D_CLIENTE',
+        schema='DW',
+        if_exists='replace',
+        index=False,
+        chunksize=100
+    )
 
 
 def run_dim_cliente(conn):
     (
         extract_dim_cliente(conn).
-        pipe(treat_dim_cliente).
-        pipe(load_dim_cliente, conn=conn)
+            pipe(treat_dim_cliente).
+            pipe(load_dim_cliente, conn=conn)
     )
 
 

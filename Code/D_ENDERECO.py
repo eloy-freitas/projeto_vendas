@@ -9,7 +9,7 @@ import DW_TOOLS as dwt
 def extract_dim_endereco(conn):
     dim_endereco = dwt.read_table(
         conn=conn,
-        schema='STAGES',
+        schema='STAGE',
         table_name='STAGE_ENDERECO'
     )
 
@@ -61,12 +61,13 @@ def treat_dim_endereco(dim_endereco):
 
 
 def load_dim_endereco(dim_endereco, conn):
-    insert_data(
-        data=dim_endereco,
-        connection=conn,
-        table_name='D_ENDERECO',
-        schema_name='DW',
-        action='replace'
+    dim_endereco.to_sql(
+        con=conn,
+        name='D_ENDERECO',
+        schema='DW',
+        if_exists='replace',
+        index=False,
+        chunksize=100
     )
 
 

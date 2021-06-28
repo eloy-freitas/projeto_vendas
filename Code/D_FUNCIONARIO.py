@@ -8,7 +8,7 @@ import DW_TOOLS as dwt
 def extract_dim_funcionario(conn):
     dim_funcionario = dwt.read_table(
         conn=conn,
-        schema='STAGES',
+        schema='STAGE',
         table_name='STAGE_FUNCIONARIO'
     )
 
@@ -55,7 +55,14 @@ def treat_dim_funcionario(dim_funcionario):
 
 
 def load_dim_funcionario(dim_funcionario, conn):
-    insert_data(dim_funcionario, conn, 'D_FUNCIONARIO', 'DW', 'replace')
+    dim_funcionario.to_sql(
+        con=conn,
+        name='D_FUNCIONARIO',
+        schema='DW',
+        if_exists='replace',
+        index=False,
+        chunksize=100
+    )
 
 
 def run_dim_funcionario(conn):

@@ -18,7 +18,7 @@ columns_names = {
 def extract_dim_loja(conn):
     dim_loja = dwt.read_table(
         conn=conn,
-        schema='STAGES',
+        schema='STAGE',
         table_name='STAGE_LOJA'
     )
     return dim_loja
@@ -70,7 +70,7 @@ def get_updated_loja(conn):
     # extraindo os dados da stage
     df_stage = dwt.read_table(
         conn=conn,
-        schema='STAGES',
+        schema='STAGE',
         table_name='STAGE_LOJA'
     ).rename(columns=columns_names)
 
@@ -81,12 +81,12 @@ def get_updated_loja(conn):
         table_name='D_LOJA',
         where='"SK_LOJA" > 0'
     )
-
+    print(df_dw.filter(items=select_columns).columns, df_stage.filter(items=select_columns).columns)
     # fazendo a diferença da stage com o dw, para saber os dados que atualizaram
     diference = (
         df_dw.
-            filter(items=select_columns).
-            compare(df_stage.filter(items=select_columns),
+            filter(items=select_columns).sort_index().
+            compare(df_stage.filter(items=select_columns).sort_index(),
                     align_axis=0,
                     keep_shape=False
                     )
@@ -128,23 +128,25 @@ def get_updated_loja(conn):
 
 
 def load_updated_loja(updated_values, conn):
-    insert_data(
-        data=updated_values,
-        connection=conn,
-        table_name='D_LOJA',
-        schema_name='DW',
-        action='append'
+    updated_values.to_sql(
+        con=conn,
+        name='D_LOJA',
+        schema='DW',
+        if_exists='append',
+        index=False,
+        chunksize=100
     )
 
 
 def load_dim_loja(dim_loja, conn):
-    insert_data(
-        data=dim_loja,
-        connection=conn,
-        table_name='D_LOJA',
-        schema_name='DW',
-        action='replace'
-    )
+   dim_loja.to_sql(
+        con=conn,
+        name='D_LOJA',
+        schema='DW',
+        if_exists='replace',
+        index=False,
+        chunksize=100
+    ) 
 
 
 def run_updated_loja(conn):

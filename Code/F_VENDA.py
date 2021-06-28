@@ -8,7 +8,7 @@ import DW_TOOLS as dwt
 def extract_fact_venda(conn):
     stage_venda = dwt.read_table(
         conn=conn,
-        schema='STAGES',
+        schema='STAGE',
         table_name='STAGE_VENDA',
         columns=['id_venda', 'id_pagamento', 'id_cliente',
                  'id_func', 'id_loja', 'nfc', 'data_venda']
@@ -20,7 +20,7 @@ def extract_fact_venda(conn):
 
     stage_item_venda = dwt.read_table(
         conn=conn,
-        schema='STAGES',
+        schema='STAGE',
         table_name='STAGE_ITEM_VENDA'
     )
 
@@ -40,7 +40,7 @@ def extract_fact_venda(conn):
 
     stage_cliente = dwt.read_table(
         conn=conn,
-        schema='STAGES',
+        schema='STAGE',
         table_name='STAGE_CLIENTE',
         columns=['id_cliente', 'id_endereco']
     )
@@ -71,7 +71,7 @@ def extract_fact_venda(conn):
 
     stage_loja = dwt.read_table(
         conn=conn,
-        schema='STAGES',
+        schema='STAGE',
         table_name='STAGE_LOJA',
         columns=['id_loja', 'id_endereco']
     )

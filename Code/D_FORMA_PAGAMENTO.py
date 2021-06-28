@@ -7,7 +7,7 @@ import DW_TOOLS as dwt
 def extract_dim_forma_pagamento(conn):
     dim_forma_pagamento = dwt.read_table(
         conn=conn,
-        schema="STAGES",
+        schema="STAGE",
         table_name="STAGE_FORMA_PAGAMENTO"
     )
 
@@ -56,14 +56,14 @@ def treat_dim_forma_pagamento(dim_forma_pagamento):
 
 
 def load_dim_forma_pagamento(dim_forma_pagamento, conn):
-    insert_data(
-        data=dim_forma_pagamento,
-        connection=conn,
-        table_name='D_FORMA_PAGAMENTO',
-        schema_name='DW',
-        action='replace'
+    dim_forma_pagamento.to_sql(
+        con=conn,
+        name='D_FORMA_PAGAMENTO',
+        schema='DW',
+        if_exists='replace',
+        index=False,
+        chunksize=100
     )
-
 
 def run_dim_forma_pagamento(conn):
     (

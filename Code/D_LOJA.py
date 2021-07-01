@@ -2,7 +2,6 @@ import pandas as pd
 import datetime as dt
 import time as t
 from CONEXAO import create_connection_postgre
-from tools import insert_data
 import DW_TOOLS as dwt
 
 columns_names = {
@@ -11,30 +10,67 @@ columns_names = {
     "razao_social": "DS_RAZAO_SOCIAL",
     "cnpj": "NU_CNPJ",
     "telefone": "NU_TELEFONE",
-    "id_endereco": "CD_ENDERECO_LOJA"
+    "id_endereco": "CD_ENDERECO_LOJA",
+    "estado": "NO_ESTADO",
+    "cidade": "NO_CIDADE",
+    "bairro": "NO_BAIRRO",
+    "rua": "DS_RUA"
 }
+
+
+def extract_stage_loja(conn):
+    stage_loja = dwt.read_table(
+        conn=conn,
+        schema='STAGE',
+        table_name='STAGE_LOJA'
+    )
+
+    stage_endereco = dwt.read_table(
+        conn=conn,
+        schema='STAGE',
+        table_name='STAGE_ENDERECO'
+    )
+
+    stage_loja = (
+        stage_loja.pipe(
+            pd.merge,
+            right=stage_endereco,
+            left_on="id_endereco",
+            right_on="id_endereco",
+            suffixes=["_01", "_02"],
+            how='inner'
+        )
+    )
+    
+    return stage_loja
 
 
 def extract_dim_loja(conn):
     dim_loja = dwt.read_table(
         conn=conn,
-        schema='STAGE',
-        table_name='STAGE_LOJA'
+        schema='DW',
+        table_name='D_LOJA',
+        where='"SK_LOJA" > 0'
     )
+
     return dim_loja
 
 
-def treat_dim_loja(dim_loja):
+def treat_dim_loja(stage_loja):
     select_columns = [
         "id_loja",
         "nome_loja",
         "razao_social",
         "cnpj",
-        "telefone"
+        "telefone",
+        "estado",
+        "cidade",
+        "bairro",
+        "rua"
     ]
 
     dim_loja = (
-        dim_loja.
+        stage_loja.
             filter(select_columns).
             rename(columns=columns_names).
             assign(
@@ -48,41 +84,36 @@ def treat_dim_loja(dim_loja):
 
     dim_loja = (
         pd.DataFrame([
-            [-1, -1, "Não informado", "Não informado", -1, -1, -1, -1, -1],
-            [-2, -2, "Não aplicável", "Não aplicável", -2, -2, -2, -2, -2],
-            [-3, -3, "Desconhecido", "Desconhecido", -3, -3, -3, -3, -3]
+            [-1, -1, "Não informado", "Não informado", -1, -1, "Não informado", "Não informado", "Não informado", "Não informado", -1, -1, -1],
+            [-2, -2, "Não aplicável", "Não aplicável", -2, -2, "Não aplicável", "Não aplicável", "Não aplicável", "Não aplicável", -2, -2, -2],
+            [-3, -3, "Desconhecido", "Desconhecido", -3, -3, "Desconhecido", "Desconhecido", "Desconhecido", "Desconhecido", -3, -3, -3]
         ], columns=dim_loja.columns).append(dim_loja)
     )
 
     return dim_loja
 
 
-def get_updated_loja(conn):
+def treat_updated_loja(conn):
     select_columns = {
         "CD_LOJA",
         "NO_LOJA",
         "DS_RAZAO_SOCIAL",
         "NU_CNPJ",
         "NU_TELEFONE",
-        "CD_ENDERECO_LOJA"
+        "NO_ESTADO",
+        "NO_CIDADE",
+        "NO_BAIRRO",
+        "DS_RUA"
     }
 
     # extraindo os dados da stage
-    df_stage = dwt.read_table(
-        conn=conn,
-        schema='STAGE',
-        table_name='STAGE_LOJA'
-    ).rename(columns=columns_names)
+    df_stage = extract_stage_loja(conn).rename(columns=columns_names)
 
     # extraindo os dados do dw
-    df_dw = dwt.read_table(
-        conn=conn,
-        schema='DW',
-        table_name='D_LOJA',
-        where='"SK_LOJA" > 0'
-    )
-    print(df_dw.filter(items=select_columns).columns, df_stage.filter(items=select_columns).columns)
+    df_dw = extract_dim_loja(conn).rename(columns=columns_names)
+
     # fazendo a diferença da stage com o dw, para saber os dados que atualizaram
+
     diference = (
         df_dw.
             filter(items=select_columns).sort_index().
@@ -123,7 +154,7 @@ def get_updated_loja(conn):
             "DT_FIM" = \'{pd.to_datetime("today")}\'\
             where "SK_LOJA" = {sk};'
         conn.execute(sql)
-
+    
     return updated_values
 
 
@@ -151,14 +182,14 @@ def load_dim_loja(dim_loja, conn):
 
 def run_updated_loja(conn):
     (
-        get_updated_loja(conn).
+        treat_updated_loja(conn).
             pipe(load_updated_loja, conn=conn)
     )
 
 
 def run_dim_loja(conn):
     (
-        extract_dim_loja(conn=conn).
+        extract_stage_loja(conn=conn).
             pipe(treat_dim_loja).
             pipe(load_dim_loja, conn=conn)
     )
@@ -174,7 +205,7 @@ if __name__ == "__main__":
     )
 
     start = t.time()
-    #run_updated_loja(conn_dw)
-    run_dim_loja(conn_dw)
+    run_updated_loja(conn_dw)
+    #run_dim_loja(conn_dw)
     exec_time = t.time() - start
     print(f"exec_time = {exec_time}")

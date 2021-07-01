@@ -69,28 +69,11 @@ def extract_fact_venda(conn):
         columns=["SK_FUNCIONARIO", "CD_FUNCIONARIO"]
     )
 
-    stage_loja = dwt.read_table(
-        conn=conn,
-        schema='STAGE',
-        table_name='STAGE_LOJA',
-        columns=['id_loja', 'id_endereco']
-    )
-
     dim_loja = dwt.read_table(
         conn=conn,
         schema='DW',
         table_name='D_LOJA',
         columns=["SK_LOJA", "CD_LOJA"]
-    ).merge(
-        right=stage_loja,
-        left_on='CD_LOJA',
-        right_on='id_loja',
-        how='left'
-    ).merge(
-        right=dim_endereco,
-        left_on='id_endereco',
-        right_on='CD_ENDERECO',
-        how='left'
     )
 
     dim_data = dwt.read_table(
@@ -165,8 +148,7 @@ def treat_fact_venda(fact_tbl):
         "nfc": "NU_NFC",
         "qtd_produto": "QTD_PRODUTO",
         "SK_DATA": "SK_DT_VENDA",
-        "SK_ENDERECO_08": "SK_ENDERECO_LOJA",
-        "SK_ENDERECO_07": "SK_ENDERECO_CLIENTE"
+        "SK_ENDERECO": "SK_ENDERECO_CLIENTE"
     }
 
     columns_select = [
@@ -176,13 +158,12 @@ def treat_fact_venda(fact_tbl):
         "SK_LOJA",
         "SK_DT_VENDA",
         "SK_PRODUTO",
-        "SK_ENDERECO_LOJA",
         "SK_ENDERECO_CLIENTE",
         "SK_CATEGORIA",
         "NU_NFC",
         "QTD_PRODUTO",
-        "VL_BRUTO",
-        "VL_LIQUIDO"
+        "VL_PRECO_CUSTO",
+        "VL_PERCENTUAL_LUCRO"
     ]
 
     fact_venda = (
@@ -190,21 +171,16 @@ def treat_fact_venda(fact_tbl):
             rename(columns=columns_names).
             assign(
             SK_CLIENTE=lambda x: x.SK_CLIENTE.astype('int64'),
-            VL_BRUTO=lambda x: x.VL_PRECO_CUSTO * x.QTD_PRODUTO,
-            VL_LIQUIDO=lambda x: x.VL_BRUTO
-                                 * x.VL_PERCENTUAL_LUCRO,
             SK_ENDERECO_CLIENTE=lambda x: x.SK_ENDERECO_CLIENTE.apply(
-                lambda y: -3 if pd.isna(y) else y),
-            SK_ENDERECO_LOJA=lambda x: x.SK_ENDERECO_LOJA.apply(
                 lambda y: -3 if pd.isna(y) else y)).
             filter(columns_select)
     )
 
     fact_venda = (
         pd.DataFrame([
-            [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-            [-2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2],
-            [-3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3]
+            [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+            [-2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2],
+            [-3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3]
         ], columns=fact_venda.columns).append(fact_venda)
     )
 

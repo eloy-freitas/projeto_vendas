@@ -82,7 +82,7 @@ def treat_dim_produto(dim_produto):
             DT_INICIO=lambda x: dt.date(1900, 1, 1),
             DT_FIM=lambda x: None).
             assign(
-            CD_CATEGORIA=lambda x: x.NO_PRODUTO.map(
+            DS_CATEGORIA=lambda x: x.NO_PRODUTO.map(
                 lambda y:
                 "Café da manhã" if y in categoria_cafe_manha else
                 "Mercearia" if y in categoria_mercearia else
@@ -105,9 +105,9 @@ def treat_dim_produto(dim_produto):
 
     dim_produto = (
         pd.DataFrame([
-            [-1, -1, "Não informado", -1, -1, -1, -1, -1, -1, -1, -1],
-            [-2, -2, "Não aplicável", -2, -2, -2, -2, -2, -2, -2, -2],
-            [-3, -3, "Desconhecido", -3, -3, -3, -3, -3, -3, -3, -3]
+            [-1, -1, "Não informado", -1, -1, -1, -1, -1, -1, -1, "Não informado"],
+            [-2, -2, "Não aplicável", -2, -2, -2, -2, -2, -2, -2, "Não aplicável"],
+            [-3, -3, "Desconhecido", -3, -3, -3, -3, -3, -3, -3, "Desconhecido"]
         ], columns=dim_produto.columns).append(dim_produto)
     )
 
@@ -186,7 +186,7 @@ def get_new_produto(conn):
                                        + (max_cd_stage
                                           - max_cd_dw))).
             assign(
-            CD_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
+            DS_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
                 lambda y:
                 "Café da manhã" if y in categoria_cafe_manha else
                 "Mercearia" if y in categoria_mercearia else
@@ -246,7 +246,7 @@ def get_updated_produto(conn):
                     keep_shape=False
                     )
     )
-    print(diference)
+
     # identificando index das linhas alteradas
     indexes = {x[0] for x in diference.index}
     size = df_dw['SK_PRODUTO'].max() + 1
@@ -323,8 +323,8 @@ if __name__ == "__main__":
     )
 
     start = t.time()
-    #run_dim_produto(conn_dw)
+    run_dim_produto(conn_dw)
     #run_new_produto(conn_dw)
-    run_update_produto(conn_dw)
+    #run_update_produto(conn_dw)
     exec_time = t.time() - start
     print(f"exec_time = {exec_time}")

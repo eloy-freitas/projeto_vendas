@@ -1,8 +1,11 @@
 import time as t
 import pandas as pd
 from CONEXAO import create_connection_postgre
-from tools import insert_data, get_data_from_database, merge_input
 import DW_TOOLS as dwt
+from sqlalchemy.types import Integer
+from sqlalchemy.types import String
+from sqlalchemy.types import DateTime
+from sqlalchemy.types import Float
 
 
 def extract_fact_venda(conn):
@@ -91,37 +94,38 @@ def extract_fact_venda(conn):
         conn=conn,
         schema='DW',
         table_name='D_PRODUTO',
-        columns=["SK_PRODUTO", "CD_PRODUTO", "CD_CATEGORIA",
-                 "VL_PRECO_CUSTO", "VL_PERCENTUAL_LUCRO"]
+        columns=["SK_PRODUTO", "CD_PRODUTO", "DS_CATEGORIA",
+                 "VL_PRECO_CUSTO", "VL_PERCENTUAL_LUCRO",
+                 'DT_INICIO', 'DT_FIM']
     )
 
     fact_venda = (
         stage_venda.
-            pipe(merge_input,
+            pipe(dwt.merge_input,
                  right=dim_data,
                  left_on="data_venda",
                  right_on="DT_REFERENCIA",
                  suff=['_16', '_17'],
                  surrogate_key='SK_DATA').
-            pipe(merge_input,
+            pipe(dwt.merge_input,
                  right=dim_forma_pagamento,
                  left_on="id_pagamento",
                  right_on="CD_FORMA_PAGAMENTO",
                  suff=["_01", "_02"],
                  surrogate_key="SK_FORMA_PAGAMENTO").
-            pipe(merge_input,
+            pipe(dwt.merge_input,
                  right=dim_cliente,
                  left_on="id_cliente",
                  right_on="CD_CLIENTE",
                  suff=["_03", "_04"],
                  surrogate_key="SK_CLIENTE").
-            pipe(merge_input,
+            pipe(dwt.merge_input,
                  right=dim_funcionario,
                  left_on="id_func",
                  right_on="CD_FUNCIONARIO",
                  suff=["_05", "_06"],
                  surrogate_key="SK_FUNCIONARIO").
-            pipe(merge_input,
+            pipe(dwt.merge_input,
                  right=dim_loja,
                  left_on="id_loja",
                  right_on="CD_LOJA",
@@ -131,15 +135,28 @@ def extract_fact_venda(conn):
                  right=stage_item_venda,
                  left_on="id_venda",
                  right_on="id_venda",
-                 suffixes=["_11", "_12"]).
-            pipe(merge_input,
-                 right=dim_produto,
-                 left_on="id_produto",
-                 right_on="CD_PRODUTO",
-                 suff=["_13", "_14"],
-                 surrogate_key="SK_PRODUTO")
+                 suffixes=["_11", "_12"])
     )
-
+    print(fact_venda.columns)
+    dim_produto = dim_produto.assign(
+        DT_INICIO=lambda x: pd.to_datetime(
+            x.DT_INICIO,
+            format='d/m/Y',
+            errors='ignore'),
+        DT_FIM=lambda x: pd.to_datetime(
+            x.DT_FIM,
+            format='d/m/Y',
+            errors='ignore')
+    )
+    print(dim_produto.dtypes)
+    produto_data = zip(
+        fact_venda.id_produto, 
+        fact_venda.data_venda.astype('datetime64')
+    )
+    """ 
+    for cd, dt_venda in produto_data:
+        print(f'código: {cd}, data_venda: {dt_venda}')
+     """
     return fact_venda
 
 
@@ -188,21 +205,40 @@ def treat_fact_venda(fact_tbl):
 
 
 def load_fact_venda(fact_venda, conn):
-    fact_venda.to_sql(
-        con=conn,
-        name='F_VENDA',
-        schema="DW",
-        if_exists='replace',
-        chunksize=100,
-        index=False
+    data_type = {
+        "SK_FORMA_PAGAMENTO": Integer(),
+        "SK_CLIENTE": Integer(),
+        "SK_FUNCIONARIO": Integer(),
+        "SK_LOJA": Integer(),
+        "SK_DT_VENDA": Integer(),
+        "SK_PRODUTO": Integer(),
+        "SK_ENDERECO_CLIENTE": Integer(),
+        "SK_CATEGORIA": Integer(),
+        "NU_NFC": String(),
+        "QTD_PRODUTO": Integer(),
+        "VL_PRECO_CUSTO": Float(),
+        "VL_PERCENTUAL_LUCRO": Float()
+
+    }
+    (
+        fact_venda.
+            to_sql(
+            con=conn,
+            name='F_VENDA',
+            schema="DW",
+            if_exists='replace',
+            chunksize=100,
+            index=False,
+            dtype=data_type
+        )
     )
 
 
 def run_fact_venda(conn):
     (
-        extract_fact_venda(conn).
-            pipe(treat_fact_venda).
-            pipe(load_fact_venda, conn=conn)
+        extract_fact_venda(conn)#.
+            #pipe(treat_fact_venda).
+            #pipe(load_fact_venda, conn=conn)
     )
 
 

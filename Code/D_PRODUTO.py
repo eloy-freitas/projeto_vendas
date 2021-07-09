@@ -142,15 +142,10 @@ def get_updated_produto(conn):
         "CD_PRODUTO",
         "NO_PRODUTO",
         "CD_BARRA",
+        "DT_CADASTRO",
         "VL_PRECO_CUSTO",
         "VL_PERCENTUAL_LUCRO"
     ]
-
-    columns_to_update = {
-        "CD_BARRA",
-        "VL_PRECO_CUSTO",
-        "VL_PERCENTUAL_LUCRO"
-    }
 
     df_stage = (
             extract_stage_produto(conn).
@@ -161,7 +156,9 @@ def get_updated_produto(conn):
                                    float(y.replace(",", "."))),
             VL_PERCENTUAL_LUCRO=lambda x:
             x.VL_PERCENTUAL_LUCRO.apply(lambda y:
-                                        float(y.replace(",", ".")))
+                                        float(y.replace(",", "."))),
+            DT_CADASTRO=lambda x: x.DT_CADASTRO.apply(
+                    lambda y: y[:10])
             )
     )
 
@@ -174,7 +171,7 @@ def get_updated_produto(conn):
     df = concated_dfs.reset_index(drop=True)
     df_gpby = df.groupby(list(df.columns))
     idx = [x[0] for x in df_gpby.groups.values() if len(x) == 1]
-    idx_dw = df.reindex(idx)['CD_PRODUTO'].unique()
+    idx_dw = list(df.reindex(idx)['CD_PRODUTO'].unique())
     old = (
         df_dw.
             query(f'CD_PRODUTO == {idx_dw}').
@@ -188,70 +185,37 @@ def get_updated_produto(conn):
             filter(items=select_columns)
     )
 
-    if new['NO_PRODUTO'].item() != old['NO_PRODUTO'].item():
+    if new['NO_PRODUTO'].all() != old['NO_PRODUTO'].all():
         for cd in idx_dw:
             nome = new.query(f"CD_PRODUTO == {cd}")["NO_PRODUTO"].item()
             sql = f'update "DW"."D_PRODUTO"\
                 set "NO_PRODUTO" = \'{str(nome)}\'\
                 where "CD_PRODUTO" = {cd} and "FL_ATIVO" = 1;'
             conn.execute(sql)
-    """
-    # descobrindo quais linhas foram alteradas
-    diference = (
-        df_dw.
-            filter(items=select_columns).
-            equals(df_stage.filter(items=select_columns),
-                    align_axis=0,
-                    keep_shape=False
-                    )
-    )
-
-    indexes = {x[0] for x in diference.index}
-    set_to_update = list(df_dw['CD_PRODUTO'].loc[indexes])
-    
-    if set(diference.columns).issubset(columns_to_update):
+    else:
         # identificando index das linhas alteradas
         size = df_dw['SK_PRODUTO'].max() + 1
 
+        new.insert(0, 'SK_PRODUTO', range(size, size + len(new)))
+
         # extraindo linhas que serão atualizadas
-        updated_values = (
-            df_dw.loc[indexes].
-                assign(
-                SK_PRODUTO=lambda x: range(size, size
-                                           + len(indexes)),
-                CD_PRODUTO=lambda x: df_dw.loc[indexes]['CD_PRODUTO'],
-                DT_INICIO=lambda x: pd.to_datetime("today"),
-                DT_FIM=lambda x: None,
-                FL_ATIVO=lambda x: 1
-            )
+        new = (
+            new.assign(
+                    DT_INICIO=lambda x: pd.to_datetime("today"),
+                    DT_FIM=lambda x: None,
+                    FL_ATIVO=lambda x: 1
+                )
         )
 
-        for c in diference.columns:
-            updated_values[c] = diference.iloc[1][c]
-
-        # identificando as sks que precisam ser atualizadas 
-        for sk in set_to_update:
+        # identificando as sks que precisam ser atualizadas
+        for cd in idx_dw:
             sql = f'update "DW"."D_PRODUTO"\
-                set "FL_ATIVO" = {0},\
-                "DT_FIM" = \'{pd.to_datetime("today")}\'\
-                where "CD_PRODUTO" = {sk};'
-            conn.execute(sql)
-
-        return updated_values
-
-    else:
-        if "NO_PRODUTO" in set(diference.columns):
-            print(diference['NO_PRODUTO'])
-            #print(diference.query("CD_PRODUTO == cd")["NO_PRODUTO"])
-            
-            for cd in set_to_update:
-                sql = f'update "DW"."D_PRODUTO"\
-                    set "MO_PRODUTO" = {diference.query("CD_PRODUTO = cd")},\
+                    set "FL_ATIVO" = {0},\
                     "DT_FIM" = \'{pd.to_datetime("today")}\'\
-                    where "CD_PRODUTO" = {sk};'
-                conn.execute(sql)
-            
-    """
+                    where "CD_PRODUTO" = {cd};'
+            conn.execute(sql)
+        load_new_produto(new, conn)
+
 
 def load_new_produto(insert_record, conn):
     insert_record.to_sql(
@@ -272,17 +236,9 @@ def run_dim_produto(conn):
     )
 
 
-def run_new_produto(conn):
-    (
-        get_new_produto(conn).
-            pipe(load_new_produto, conn=conn)
-    )
-
-
 def run_update_produto(conn):
     (
-        get_updated_produto(conn)#.
-            #pipe(load_new_produto, conn=conn)
+        get_updated_produto(conn)
     )
 
 

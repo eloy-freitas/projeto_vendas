@@ -4,7 +4,6 @@ from CONEXAO import create_connection_postgre
 import DW_TOOLS as dwt
 from sqlalchemy.types import Integer
 from sqlalchemy.types import String
-from sqlalchemy.types import DateTime
 from sqlalchemy.types import Float
 
 
@@ -137,28 +136,75 @@ def extract_fact_venda(conn):
                  right_on="id_venda",
                  suffixes=["_11", "_12"])
     )
-    print(fact_venda.columns)
-    dim_produto = dim_produto.assign(
-        DT_INICIO=lambda x: pd.to_datetime(
-            x.DT_INICIO,
-            format='d/m/Y',
-            errors='ignore'),
-        DT_FIM=lambda x: pd.to_datetime(
-            x.DT_FIM,
-            format='d/m/Y',
-            errors='ignore')
-    )
-    print(dim_produto.dtypes)
-    produto_data = zip(
-        fact_venda.id_produto, 
-        fact_venda.data_venda.astype('datetime64')
-    )
-    """ 
-    for cd, dt_venda in produto_data:
-        print(f'código: {cd}, data_venda: {dt_venda}')
-     """
-    return fact_venda
 
+    produtos = dim_produto.loc[3:].assign(
+            DT_INICIO=lambda x: x.DT_INICIO.astype('datetime64'),
+            DT_FIM=lambda x: x.DT_FIM.apply(
+                lambda y: -3 if y == "None" or y is None else pd.to_datetime(y)
+            )
+    ).assign(
+            DT_INICIO=lambda x: x.DT_INICIO.astype(str),
+            DT_FIM=lambda x: x.DT_FIM.astype(str)
+    ).assign(
+        DT_INICIO=lambda x: x.DT_INICIO.apply(
+            lambda y: y[:13]),
+        DT_FIM=lambda x: x.DT_FIM.apply(
+            lambda y: y[:13]
+        )
+    )
+
+    produtos = (
+        produtos.pipe(
+            dwt.merge_input,
+                right=dim_data,
+                left_on='DT_INICIO',
+                right_on='DT_REFERENCIA',
+                suff=['_01', '_02'],
+                surrogate_key='SK_DATA').
+        pipe(
+            dwt.merge_input,
+            right=dim_data,
+            left_on='DT_FIM',
+            right_on='DT_REFERENCIA',
+            suff=['_03', '_04'],
+            surrogate_key='SK_DATA'
+        ).rename(
+            columns={
+                'SK_DATA_03': 'SK_DT_INICIO',
+                'SK_DATA_04': 'SK_DT_FIM'
+            }
+        )
+    )
+
+    print(produtos.columns)
+    produto_data = zip(
+        fact_venda.id_venda,
+        fact_venda.id_produto, 
+        fact_venda.SK_DATA
+    )
+
+    select_product_columns = [
+        "SK_PRODUTO",
+        "CD_PRODUTO",
+        "SK_DT_INICIO",
+        "SK_DT_FIM"
+    ]
+    
+    for id_venda, cd_produto, dt_venda in produto_data:
+        result = (
+            produtos.
+                filter(items=select_product_columns).
+                query(f'CD_PRODUTO == {cd_produto}')
+
+        )
+        if len(produtos) == 1:
+            fact_venda.loc[fact_venda.query(f'id_venda == {id_venda} & id_produto == {cd_produto}').index, 'SK_PRODUTO'] = result.SK_PRODUTO.item()
+        else:
+            print(result.query(f'CD_PRODUTO == {cd_produto} & SK_DT_INICIO <= {dt_venda} <= SK_DT_FIM & SK_DT_FIM != -3')['SK_PRODUTO'])
+            
+    print(fact_venda['SK_PRODUTO'])
+
+    return fact_venda
 
 def treat_fact_venda(fact_tbl):
     columns_names = {
@@ -176,7 +222,6 @@ def treat_fact_venda(fact_tbl):
         "SK_DT_VENDA",
         "SK_PRODUTO",
         "SK_ENDERECO_CLIENTE",
-        "SK_CATEGORIA",
         "NU_NFC",
         "QTD_PRODUTO",
         "VL_PRECO_CUSTO",
@@ -213,7 +258,6 @@ def load_fact_venda(fact_venda, conn):
         "SK_DT_VENDA": Integer(),
         "SK_PRODUTO": Integer(),
         "SK_ENDERECO_CLIENTE": Integer(),
-        "SK_CATEGORIA": Integer(),
         "NU_NFC": String(),
         "QTD_PRODUTO": Integer(),
         "VL_PRECO_CUSTO": Float(),

@@ -137,6 +137,83 @@ def load_dim_produto(dim_produto, conn):
     )
 
 
+def get_new_produto(conn):
+    df_stage = (
+            dwt.read_table(
+                conn=conn,
+                schema='STAGE',
+                table_name='STAGE_PRODUTO').
+            assign(
+            preco_custo=lambda x: x.preco_custo.apply(
+                lambda y: float(y.replace(",", "."))),
+            percentual_lucro=lambda x: x.percentual_lucro.apply(
+                lambda y: float(y.replace(",", ".")))
+        )
+    )
+
+    df_dw = dwt.read_table(
+        conn=conn,
+        schema='DW',
+        table_name='D_PRODUTO',
+        where='"SK_PRODUTO" > 0'
+    )
+
+    join_df = (
+        pd.merge(
+            left=df_stage,
+            right=df_dw,
+            left_on='id_produto',
+            right_on="CD_PRODUTO",
+            how='left').
+            assign(
+            FL_INSERT=lambda x: x.CD_PRODUTO.apply(
+                lambda y: 'I' if pd.isnull(y) else 'N')
+        )
+    )
+
+    max_cd_dw = df_dw['SK_PRODUTO'].max() + 1
+    size = max_cd_dw + join_df.query(f'FL_INSERT == "I"').shape[0] - max_cd_dw
+    columns = [
+        "SK_PRODUTO",
+        "id_produto",
+        "nome_produto",
+        "cod_barra",
+        "preco_custo",
+        "percentual_lucro",
+        "data_cadastro",
+        "ativo",
+        "DT_INICIO",
+        "DT_FIM"]
+
+    insert_record = (
+        join_df.
+            query("FL_INSERT == 'I'")[columns].
+            rename(columns=columns_names)
+            .assign(
+            DT_INICIO=lambda x: dt.date(2020, 1, 1),
+            DT_FIM=lambda x: None,
+            SK_PRODUTO=lambda x: range(max_cd_dw,
+                                       (max_cd_dw + size))).
+            assign(
+            DS_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
+                lambda y:
+                "Café da manhã" if y in categoria_cafe_manha else
+                "Mercearia" if y in categoria_mercearia else
+                "Carnes" if y in categoria_carnes else
+                "Bebidas" if y in categoria_bebidas else
+                "Higiene" if y in categoria_higiene else
+                "Frios" if y in categoria_frios else
+                "Limpeza" if y in categoria_limpeza else
+                "Hortifruti" if y in categoria_hortifruti else
+                "Desconhecido")).
+            assign(
+            DT_CADASTRO=lambda x: x.DT_CADASTRO.astype("datetime64"),
+            NO_PRODUTO=lambda x: x.NO_PRODUTO.astype(str))
+    )
+
+    return insert_record
+
+
 def get_updated_produto(conn):
     select_columns = [
         "CD_PRODUTO",
@@ -236,6 +313,12 @@ def run_dim_produto(conn):
     )
 
 
+def run_new_produto(conn):
+    (
+        get_new_produto(conn).
+        pipe(load_new_produto, conn=conn)
+    )
+
 def run_update_produto(conn):
     (
         get_updated_produto(conn)
@@ -260,86 +343,6 @@ if __name__ == "__main__":
 
 
 
-"""
-def get_new_produto(conn):
-    df_stage = (
-            dwt.read_table(
-                conn=conn,
-                schema='STAGE',
-                table_name='STAGE_PRODUTO').
-            assign(
-            preco_custo=lambda x: x.preco_custo.apply(
-                lambda y: float(y.replace(",", "."))),
-            percentual_lucro=lambda x: x.percentual_lucro.apply(
-                lambda y: float(y.replace(",", ".")))
-        )
-    )
 
-    df_dw = dwt.read_table(
-        conn=conn,
-        schema='DW',
-        table_name='D_PRODUTO',
-        where='"SK_PRODUTO" > 0'
-    )
 
-    join_df = (
-        pd.merge(
-            left=df_stage,
-            right=df_dw,
-            left_on='id_produto',
-            right_on="CD_PRODUTO",
-            how='left').
-            assign(
-            FL_INSERT=lambda x: x.CD_PRODUTO.apply(
-                lambda y: 'I' if pd.isnull(y) else 'N')
-        )
-    )
-
-    max_cd_stage = df_stage['id_produto'].max() + 1
-    max_cd_dw = df_dw['CD_PRODUTO'].max() + 1
-
-    columns = [
-        "SK_PRODUTO",
-        "id_produto",
-        "nome_produto",
-        "cod_barra",
-        "preco_custo",
-        "percentual_lucro",
-        "data_cadastro",
-        "ativo",
-        "DT_INICIO",
-        "DT_FIM"]
-
-    insert_record = (
-        join_df.
-            query("FL_INSERT == 'I'")[columns].
-            rename(columns=columns_names)
-            .assign(
-            DT_INICIO=lambda x: dt.date(1900, 1, 1),
-            DT_FIM=lambda x: None,
-            SK_PRODUTO=lambda x: range(max_cd_dw,
-                                       max_cd_dw
-                                       + (max_cd_stage
-                                          - max_cd_dw))).
-            assign(
-            DS_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
-                lambda y:
-                "Café da manhã" if y in categoria_cafe_manha else
-                "Mercearia" if y in categoria_mercearia else
-                "Carnes" if y in categoria_carnes else
-                "Bebidas" if y in categoria_bebidas else
-                "Higiene" if y in categoria_higiene else
-                "Frios" if y in categoria_frios else
-                "Limpeza" if y in categoria_limpeza else
-                "Hortifruti" if y in categoria_hortifruti else
-                "Desconhecido")).
-            assign(
-            DT_CADASTRO=lambda x: x.DT_CADASTRO.astype("datetime64"),
-            NO_PRODUTO=lambda x: x.NO_PRODUTO.astype(str))
-
-    )
-
-    return insert_record
-
-"""
 

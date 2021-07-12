@@ -17,6 +17,18 @@ columns_names = {
     "rua": "DS_RUA"
 }
 
+select_columns = [
+    "id_loja",
+    "nome_loja",
+    "razao_social",
+    "cnpj",
+    "telefone",
+    "estado",
+    "cidade",
+    "bairro",
+    "rua"
+]
+
 
 def extract_stage_loja(conn):
     stage_loja = dwt.read_table(
@@ -57,18 +69,6 @@ def extract_dim_loja(conn):
 
 
 def treat_dim_loja(stage_loja):
-    select_columns = [
-        "id_loja",
-        "nome_loja",
-        "razao_social",
-        "cnpj",
-        "telefone",
-        "estado",
-        "cidade",
-        "bairro",
-        "rua"
-    ]
-
     dim_loja = (
         stage_loja.
             filter(select_columns).
@@ -91,6 +91,53 @@ def treat_dim_loja(stage_loja):
     )
 
     return dim_loja
+
+
+def get_new_loja(conn):
+    df_stage = extract_stage_loja(conn)
+
+    df_dw = extract_dim_loja(conn)
+
+    join_df = (
+        pd.merge(
+            left=df_stage,
+            right=df_dw,
+            left_on='id_loja',
+            right_on="CD_LOJA",
+            how='left').
+            assign(
+            FL_INSERT=lambda x: x.CD_LOJA.apply(
+                lambda y: 'I' if pd.isnull(y) else 'N')
+        )
+    )
+
+    max_cd_dw = df_dw['SK_LOJA'].max() + 1
+    size = max_cd_dw + join_df.query(f'FL_INSERT == "I"').shape[0] - max_cd_dw
+    columns = [
+        "SK_LOJA",
+        "id_loja",
+        "nome_loja",
+        "razao_social",
+        "cnpj",
+        "telefone",
+        "id_endereco",
+        "FL_ATIVO",
+        "DT_INICIO",
+        "DT_FIM"]
+
+    insert_record = (
+        join_df.
+            query("FL_INSERT == 'I'")[columns].
+            filter(items=select_columns).
+            rename(columns=columns_names).
+            assign(
+                DT_INICIO=lambda x: pd.to_datetime('today'),
+                DT_FIM=lambda x: None)
+
+    )
+
+    print(insert_record.columns)
+    return insert_record
 
 
 def treat_updated_loja(conn):
@@ -187,6 +234,13 @@ def run_updated_loja(conn):
     )
 
 
+def run_new_loja(conn):
+    (
+        get_new_loja(conn)#.
+        #pipe(load_updated_loja, conn=conn)
+    )
+
+
 def run_dim_loja(conn):
     (
         extract_stage_loja(conn=conn).
@@ -205,6 +259,7 @@ if __name__ == "__main__":
     )
 
     start = t.time()
+    #run_new_loja(conn_dw)
     run_updated_loja(conn_dw)
     #run_dim_loja(conn_dw)
     exec_time = t.time() - start

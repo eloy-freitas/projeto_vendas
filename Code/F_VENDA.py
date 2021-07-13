@@ -137,6 +137,7 @@ def extract_fact_venda(conn):
                  suffixes=["_11", "_12"])
     )
 
+    #tradando as datas da dimensão produto
     produtos = dim_produto.loc[3:].assign(
             DT_INICIO=lambda x: x.DT_INICIO.astype('datetime64'),
             DT_FIM=lambda x: x.DT_FIM.apply(
@@ -152,7 +153,7 @@ def extract_fact_venda(conn):
             lambda y: y[:13]
         )
     )
-
+    #convertendo as datas da dimensão produto para inteiro
     produtos = (
         produtos.pipe(
             dwt.merge_input,
@@ -176,35 +177,49 @@ def extract_fact_venda(conn):
         )
     )
 
-    print(produtos.columns)
-    produto_data = zip(
-        fact_venda.id_venda,
-        fact_venda.id_produto, 
-        fact_venda.SK_DATA
-    )
-
-    select_product_columns = [
+    product_columns = [
         "SK_PRODUTO",
         "CD_PRODUTO",
         "SK_DT_INICIO",
-        "SK_DT_FIM"
+        "SK_DT_FIM",
+        "VL_PRECO_CUSTO",
+        "VL_PERCENTUAL_LUCRO"
     ]
-    
-    for id_venda, cd_produto, dt_venda in produto_data:
+
+    select_columns = [
+        'SK_PRODUTO',
+        'VL_PRECO_CUSTO',
+        'VL_PERCENTUAL_LUCRO'
+    ]
+
+    fact_columns = ['id_produto', 'SK_DATA']
+
+    fact_venda[select_columns] = [0, 0, 0]
+    #mergin com scd_produto com a fato
+    for (frow, factrows) in fact_venda.filter(items=fact_columns).iterrows():
         result = (
             produtos.
-                filter(items=select_product_columns).
-                query(f'CD_PRODUTO == {cd_produto}')
-
+                filter(items=product_columns).
+                query(f'CD_PRODUTO == {factrows.id_produto}')
         )
-        if len(produtos) == 1:
-            fact_venda.loc[fact_venda.query(f'id_venda == {id_venda} & id_produto == {cd_produto}').index, 'SK_PRODUTO'] = result.SK_PRODUTO.item()
-        else:
-            print(result.query(f'CD_PRODUTO == {cd_produto} & SK_DT_INICIO <= {dt_venda} <= SK_DT_FIM & SK_DT_FIM != -3')['SK_PRODUTO'])
-            
-    print(fact_venda['SK_PRODUTO'])
 
+        if len(result) == 1:
+            fact_venda.loc[frow, 'SK_PRODUTO'] = result.SK_PRODUTO.item()
+            fact_venda.loc[frow, 'VL_PRECO_CUSTO'] = result.VL_PRECO_CUSTO.item()
+            fact_venda.loc[frow, 'VL_PERCENTUAL_LUCRO'] = result.VL_PERCENTUAL_LUCRO.item()
+        else:
+            for (rrows, resultrows) in result.iterrows():
+                if resultrows.SK_DT_INICIO <= factrows.SK_DATA:
+                    if factrows.SK_DATA <= resultrows.SK_DT_FIM or resultrows.SK_DT_FIM == -3:
+                        fact_venda.loc[frow, 'SK_PRODUTO'] = resultrows.SK_PRODUTO.item()
+                        fact_venda.loc[frow, 'VL_PRECO_CUSTO'] = resultrows.VL_PRECO_CUSTO.item()
+                        fact_venda.loc[frow, 'VL_PERCENTUAL_LUCRO'] = resultrows.VL_PERCENTUAL_LUCRO.item()
+                    break
+    
+    print(fact_venda.columns)
+    print(fact_venda[['VL_PERCENTUAL_LUCRO', 'VL_PRECO_CUSTO']])
     return fact_venda
+
 
 def treat_fact_venda(fact_tbl):
     columns_names = {
@@ -237,7 +252,7 @@ def treat_fact_venda(fact_tbl):
                 lambda y: -3 if pd.isna(y) else y)).
             filter(columns_select)
     )
-
+    print(fact_venda.columns)
     fact_venda = (
         pd.DataFrame([
             [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
@@ -280,9 +295,9 @@ def load_fact_venda(fact_venda, conn):
 
 def run_fact_venda(conn):
     (
-        extract_fact_venda(conn)#.
-            #pipe(treat_fact_venda).
-            #pipe(load_fact_venda, conn=conn)
+        extract_fact_venda(conn).
+            pipe(treat_fact_venda).
+            pipe(load_fact_venda, conn=conn)
     )
 
 

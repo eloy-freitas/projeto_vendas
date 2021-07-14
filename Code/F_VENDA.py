@@ -193,6 +193,7 @@ def extract_fact_venda(conn):
     ]
 
     fact_columns = ['id_produto', 'SK_DATA']
+    fact_venda = fact_venda.sort_values(by='id_produto')
 
     fact_venda[select_columns] = [0, 0, 0]
     #mergin com scd_produto com a fato
@@ -202,7 +203,7 @@ def extract_fact_venda(conn):
                 filter(items=product_columns).
                 query(f'CD_PRODUTO == {factrows.id_produto}')
         )
-
+        print(frow)
         if len(result) == 1:
             fact_venda.loc[frow, 'SK_PRODUTO'] = result.SK_PRODUTO.item()
             fact_venda.loc[frow, 'VL_PRECO_CUSTO'] = result.VL_PRECO_CUSTO.item()
@@ -295,9 +296,9 @@ def load_fact_venda(fact_venda, conn):
 
 def run_fact_venda(conn):
     (
-        extract_fact_venda(conn).
-            pipe(treat_fact_venda).
-            pipe(load_fact_venda, conn=conn)
+        extract_fact_venda(conn)#.
+            #pipe(treat_fact_venda).
+            #pipe(load_fact_venda, conn=conn)
     )
 
 

@@ -1,4 +1,5 @@
 import pandas as pd
+import unidecode as uc
 import datetime as dt
 import time as t
 from CONEXAO import create_connection_postgre
@@ -14,36 +15,31 @@ columns_names = {
     "ativo": "FL_ATIVO"
 }
 
-categoria_cafe_manha = {"CAFE", "ACHOCOLATADO", "CEREAIS", "PÃO",
-                        "AÇUCAR", "SUCO", "ADOÇANTE", "BISCOITO",
-                        "GELEIA", "IOGURTE"}
-
-categoria_mercearia = {"ARROZ", "FEIJÃO", "FARINHA DE TRIGO",
-                       "AMIDO DE MILHO", "FERMENTO", "MACARRÃO",
-                       "MOLHO DE TOMATE", "AZEITE", "ÓLEO DE SOJA",
-                       "OVOS", "TEMPERO", "SAL", "FARINHA DE AVEIA",
-                       "EXTRATO DE TOMATE", "AÇUCAR 4 KG",
-                       "SAZON SABOR CARNE", "SAZON SABOR FRANGO"}
-
-categoria_carnes = {"BIFE DE BOI", "FRANGO", "PEIXE", "CARNE MOIDA",
-                    "SALSICHA", "LINGUIÇA"}
-
-categoria_bebidas = {"SUCO", "CERVEJA", "REFRIGERANTE", "VINHO"}
-
-categoria_higiene = {"SABONETE", "CREME DENTAL", "SHAMPOO",
-                     "CONDICIONADOR", "ABSORVENTE", "PAPEL HIGIÊNICO",
-                     "FRALDA"}
-
-categoria_frios = {"LEITE", "PRESUNTO", "QUEIJO", "REQUEIJÃO",
-                   "MANTEIGA", "CREME DE LEITE", "MANTEIGA SEM SAL"}
-
-categoria_limpeza = {"AGUA SANITARIA", "SABÃO EM PÓ", "PALHA DE AÇO",
-                     "AMACIANTE", "DETERGENTE", "SACO DE LIXO",
-                     "DESINFETANTE", "PAPEL TOALHA", "PAPEL HIGIENICO"}
-
-categoria_hortifruti = {"ALFACE", "CEBOLA", "ALHO", "TOMATE",
-                        "LIMÃO", "BANANA", "MAÇÃ", "BATATA",
-                        "BATATA DOCE", "BATATA INGLESA"}
+categorias = {'cafe da manhã': {"CAFE", "ACHOCOLATADO", "CEREAIS", "PAO",
+                                "ACUCAR", "ADOCANTE", "BISCOITO",
+                                "GELEIA", "IOGURTE", "IORGUTE", "FANDANGOS"},
+              'mercearia': {"ARROZ", "FEIJAO", "FARINHA", "TRIGO",
+                            "AMIDO", "MILHO", "FERMENTO", "MACARRAO",
+                            "MOLHO", "TOMATE", "AZEITE", "OLEO", "SOJA",
+                            "OVOS", "TEMPERO", "SAL", "AVEIA",
+                            "EXTRATO", "ACUCAR", "SPAGHETTI"
+                            "SAZON", "CARNE", "SABOR", "FRANGO"
+                            },
+              'carnes': {"BIFE", "FILE", "BOI", "FRANGO", "PEIXE", "CARNE", "MOIDA",
+                         "SALSICHA", "LINGUICA"},
+              'bebidas': {"KI", "SUCO", "CERVEJA", "REFRIGERANTE", "VINHO"},
+              'higiene': {"SABONETE", "CREME", "DENTAL", "SHAMPOO",
+                          "CONDICIONADOR", "ABSORVENTE", "PAPEL", "HIGIENICO",
+                          "FRALDA"},
+              'hortifruti': {"ALFACE", "CEBOLA", "ALHO", "TOMATE",
+                             "LIMAO", "BANANA", "MACA", "BATATA",
+                             "DOCE", "INGLESA"},
+              'frios': {"LEITE", "PRESUNTO", "QUEIJO", "REQUEIJAO",
+                        "MANTEIGA", "CREME"},
+              'limpeza': {"AGUA", "SANITARIA", "SABAO", "PO", "PALHA", "AÇO",
+                          "AMACIANTE", "DETERGENTE", "SACO", "LIXO",
+                          "DESINFETANTE", "PAPEL", "TOALHA", "PAPEL", "HIGIENICO"}
+              }
 
 
 def extract_stage_produto(conn):
@@ -94,17 +90,8 @@ def treat_dim_produto(dim_produto):
             DT_INICIO=lambda x: x.DT_CADASTRO,
             DT_FIM=lambda x: None).
             assign(
-            DS_CATEGORIA=lambda x: x.NO_PRODUTO.map(
-                lambda y:
-                "Café da manhã" if y in categoria_cafe_manha else
-                "Mercearia" if y in categoria_mercearia else
-                "Carnes" if y in categoria_carnes else
-                "Bebidas" if y in categoria_bebidas else
-                "Higiene" if y in categoria_higiene else
-                "Frios" if y in categoria_frios else
-                "Limpeza" if y in categoria_limpeza else
-                "Hortifruti" if y in categoria_hortifruti else
-                "Desconhecido")).
+            DS_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
+                lambda y: classificar_produto(y))).
             assign(
             DT_CADASTRO=lambda x: x.DT_CADASTRO.astype(str),
             DT_INICIO=lambda x: x.DT_INICIO.astype(str),
@@ -139,10 +126,10 @@ def load_dim_produto(dim_produto, conn):
 
 def get_new_produto(conn):
     df_stage = (
-            dwt.read_table(
-                conn=conn,
-                schema='STAGE',
-                table_name='STAGE_PRODUTO').
+        dwt.read_table(
+            conn=conn,
+            schema='STAGE',
+            table_name='STAGE_PRODUTO').
             assign(
             preco_custo=lambda x: x.preco_custo.apply(
                 lambda y: float(y.replace(",", "."))),
@@ -196,16 +183,7 @@ def get_new_produto(conn):
                                        (max_cd_dw + size))).
             assign(
             DS_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
-                lambda y:
-                "Café da manhã" if y in categoria_cafe_manha else
-                "Mercearia" if y in categoria_mercearia else
-                "Carnes" if y in categoria_carnes else
-                "Bebidas" if y in categoria_bebidas else
-                "Higiene" if y in categoria_higiene else
-                "Frios" if y in categoria_frios else
-                "Limpeza" if y in categoria_limpeza else
-                "Hortifruti" if y in categoria_hortifruti else
-                "Desconhecido")).
+                lambda y: classificar_produto(y))).
             assign(
             DT_CADASTRO=lambda x: x.DT_CADASTRO.astype("datetime64"),
             NO_PRODUTO=lambda x: x.NO_PRODUTO.astype(str))
@@ -225,7 +203,7 @@ def get_updated_produto(conn):
     ]
 
     df_stage = (
-            extract_stage_produto(conn).
+        extract_stage_produto(conn).
             rename(columns=columns_names).
             assign(
             VL_PRECO_CUSTO=lambda x:
@@ -235,8 +213,8 @@ def get_updated_produto(conn):
             x.VL_PERCENTUAL_LUCRO.apply(lambda y:
                                         float(y.replace(",", "."))),
             DT_CADASTRO=lambda x: x.DT_CADASTRO.apply(
-                    lambda y: y[:10])
-            )
+                lambda y: y[:10])
+        )
     )
 
     df_dw = extract_dim_produto(conn)
@@ -278,10 +256,12 @@ def get_updated_produto(conn):
         # extraindo linhas que serão atualizadas
         new = (
             new.assign(
-                    DT_INICIO=lambda x: pd.to_datetime("today"),
-                    DT_FIM=lambda x: None,
-                    FL_ATIVO=lambda x: 1
-                )
+                DT_INICIO=lambda x: pd.to_datetime("today"),
+                DT_FIM=lambda x: None,
+                FL_ATIVO=lambda x: 1,
+                DS_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
+                    lambda y: classificar_produto(y))
+            )
         )
 
         # identificando as sks que precisam ser atualizadas
@@ -302,7 +282,7 @@ def load_new_produto(insert_record, conn):
         if_exists='append',
         index=False,
         chunksize=100
-    )   
+    )
 
 
 def run_dim_produto(conn):
@@ -316,13 +296,21 @@ def run_dim_produto(conn):
 def run_new_produto(conn):
     (
         get_new_produto(conn).
-        pipe(load_new_produto, conn=conn)
+            pipe(load_new_produto, conn=conn)
     )
+
 
 def run_update_produto(conn):
     (
         get_updated_produto(conn)
     )
+
+
+def classificar_produto(nome):
+    nome = set(str(uc.unidecode(nome)).split())
+    data_set = [len(categorias[x].intersection(nome)) for x in categorias]
+    result = pd.Series(data=data_set, index=categorias.keys())
+    return 'Desconhecido' if result.max() == 0 else result.idxmax()
 
 
 if __name__ == "__main__":
@@ -338,11 +326,6 @@ if __name__ == "__main__":
     #run_dim_produto(conn_dw)
     #run_new_produto(conn_dw)
     run_update_produto(conn_dw)
+
     exec_time = t.time() - start
     print(f"exec_time = {exec_time}")
-
-
-
-
-
-

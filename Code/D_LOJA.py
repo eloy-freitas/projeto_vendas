@@ -121,6 +121,10 @@ def get_new_loja(conn):
         "cnpj",
         "telefone",
         "id_endereco",
+        "estado",
+        "cidade",
+        "bairro",
+        "rua",
         "FL_ATIVO",
         "DT_INICIO",
         "DT_FIM"]
@@ -131,12 +135,14 @@ def get_new_loja(conn):
             filter(items=select_columns).
             rename(columns=columns_names).
             assign(
+                SK_LOJA=lambda x: range(max_cd_dw,
+                                       (max_cd_dw + size)),
+                FL_ATIVO=lambda x: 1,
                 DT_INICIO=lambda x: pd.to_datetime('today'),
                 DT_FIM=lambda x: None)
 
     )
 
-    print(insert_record.columns)
     return insert_record
 
 
@@ -236,8 +242,8 @@ def run_updated_loja(conn):
 
 def run_new_loja(conn):
     (
-        get_new_loja(conn)#.
-        #pipe(load_updated_loja, conn=conn)
+        get_new_loja(conn).
+        pipe(load_updated_loja, conn=conn)
     )
 
 

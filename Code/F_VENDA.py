@@ -141,7 +141,7 @@ def extract_fact_venda(conn):
     produtos = dim_produto.loc[3:].assign(
             DT_INICIO=lambda x: x.DT_INICIO.astype('datetime64'),
             DT_FIM=lambda x: x.DT_FIM.apply(
-                lambda y: -3 if y == "None" or y is None else pd.to_datetime(y)
+                lambda y: 30000 if y == "None" or y is None else pd.to_datetime(y)
             )
     ).assign(
             DT_INICIO=lambda x: x.DT_INICIO.astype(str),
@@ -177,27 +177,24 @@ def extract_fact_venda(conn):
         )
     )
 
-    product_columns = [
-        "SK_PRODUTO",
-        "CD_PRODUTO",
-        "SK_DT_INICIO",
-        "SK_DT_FIM",
-        "VL_PRECO_CUSTO",
-        "VL_PERCENTUAL_LUCRO"
-    ]
-
     select_columns = [
         'SK_PRODUTO',
         'VL_PRECO_CUSTO',
         'VL_PERCENTUAL_LUCRO'
     ]
 
-    fact_columns = ['id_produto', 'SK_DATA']
-    fact_venda = fact_venda.sort_values(by='id_produto')
+    def merge_produto(id_produto, data_venda):
+        return produtos.query(f'CD_PRODUTO == {id_produto} & SK_DT_INICIO <= {data_venda} <= SK_DT_FIM')[select_columns]
+    #['id_produto', 'SK_DATA']
+    columns = lambda x: produtos.query(f'CD_PRODUTO == {x.id_produto} & SK_DT_INICIO <= {x.data_venda} <= SK_DT_FIM')[select_columns]
 
-    fact_venda[select_columns] = [0, 0, 0]
-    #mergin com scd_produto com a fato
+    result = fact_venda.sort_values(by='id_produto').apply(lambda x: merge_produto(x['id_produto'], x['SK_DATA']), axis=1)
+    print(result)
+    """
+     #mergin com scd_produto com a fato
     for (frow, factrows) in fact_venda.filter(items=fact_columns).iterrows():
+       print(factrows)
+           
         result = (
             produtos.
                 filter(items=product_columns).
@@ -205,9 +202,7 @@ def extract_fact_venda(conn):
         )
         print(frow)
         if len(result) == 1:
-            fact_venda.loc[frow, 'SK_PRODUTO'] = result.SK_PRODUTO.item()
-            fact_venda.loc[frow, 'VL_PRECO_CUSTO'] = result.VL_PRECO_CUSTO.item()
-            fact_venda.loc[frow, 'VL_PERCENTUAL_LUCRO'] = result.VL_PERCENTUAL_LUCRO.item()
+            fact_venda.loc[frow, select_columns] = result.filter(items=select_columns)
         else:
             for (rrows, resultrows) in result.iterrows():
                 if resultrows.SK_DT_INICIO <= factrows.SK_DATA:
@@ -216,9 +211,8 @@ def extract_fact_venda(conn):
                         fact_venda.loc[frow, 'VL_PRECO_CUSTO'] = resultrows.VL_PRECO_CUSTO.item()
                         fact_venda.loc[frow, 'VL_PERCENTUAL_LUCRO'] = resultrows.VL_PERCENTUAL_LUCRO.item()
                     break
-    
-    print(fact_venda.columns)
-    print(fact_venda[['VL_PERCENTUAL_LUCRO', 'VL_PRECO_CUSTO']])
+    """
+
     return fact_venda
 
 

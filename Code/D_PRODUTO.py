@@ -42,6 +42,13 @@ categorias = {'cafe da manhã': {"CAFE", "ACHOCOLATADO", "CEREAIS", "PAO",
               }
 
 
+def classificar_produto(nome):
+    nome = set(str(uc.unidecode(nome)).split())
+    data_set = [len(categorias[x].intersection(nome)) for x in categorias]
+    result = pd.Series(data=data_set, index=categorias.keys())
+    return 'Desconhecido' if result.max() == 0 else result.idxmax()
+
+
 def extract_stage_produto(conn):
     stage_produto = dwt.read_table(
         conn=conn,
@@ -306,11 +313,7 @@ def run_update_produto(conn):
     )
 
 
-def classificar_produto(nome):
-    nome = set(str(uc.unidecode(nome)).split())
-    data_set = [len(categorias[x].intersection(nome)) for x in categorias]
-    result = pd.Series(data=data_set, index=categorias.keys())
-    return 'Desconhecido' if result.max() == 0 else result.idxmax()
+
 
 
 if __name__ == "__main__":

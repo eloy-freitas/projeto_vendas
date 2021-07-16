@@ -1,11 +1,11 @@
 import time as t
 import pandas as pd
-from CONEXAO import create_connection_postgre
-import DW_TOOLS as dwt
 from sqlalchemy.types import Integer
 from sqlalchemy.types import String
 from sqlalchemy.types import Float
-
+from pandasql import sqldf
+from CONEXAO import create_connection_postgre
+import DW_TOOLS as dwt
 
 def extract_fact_venda(conn):
     stage_venda = dwt.read_table(
@@ -33,35 +33,11 @@ def extract_fact_venda(conn):
         columns=["SK_FORMA_PAGAMENTO", "CD_FORMA_PAGAMENTO"]
     )
 
-    dim_endereco = dwt.read_table(
-        conn=conn,
-        schema='DW',
-        table_name='D_ENDERECO',
-        columns=["SK_ENDERECO", "CD_ENDERECO"]
-    )
-
-    stage_cliente = dwt.read_table(
-        conn=conn,
-        schema='STAGE',
-        table_name='STAGE_CLIENTE',
-        columns=['id_cliente', 'id_endereco']
-    )
-
     dim_cliente = dwt.read_table(
         conn=conn,
         schema='DW',
         table_name='D_CLIENTE',
         columns=["SK_CLIENTE", "CD_CLIENTE"]
-    ).merge(
-        right=stage_cliente,
-        left_on='CD_CLIENTE',
-        right_on='id_cliente',
-        how='left'
-    ).merge(
-        right=dim_endereco,
-        left_on='id_endereco',
-        right_on='CD_ENDERECO',
-        how='left'
     )
 
     dim_funcionario = dwt.read_table(
@@ -75,7 +51,7 @@ def extract_fact_venda(conn):
         conn=conn,
         schema='DW',
         table_name='D_LOJA',
-        columns=["SK_LOJA", "CD_LOJA"]
+        columns=["SK_LOJA", "CD_LOJA","DT_INICIO", "DT_FIM"]
     )
 
     dim_data = dwt.read_table(
@@ -100,6 +76,11 @@ def extract_fact_venda(conn):
 
     fact_venda = (
         stage_venda.
+            pipe(pd.merge,
+                 right=stage_item_venda,
+                 left_on="id_venda",
+                 right_on="id_venda",
+                 suffixes=["_11", "_12"]).
             pipe(dwt.merge_input,
                  right=dim_data,
                  left_on="data_venda",
@@ -123,96 +104,109 @@ def extract_fact_venda(conn):
                  left_on="id_func",
                  right_on="CD_FUNCIONARIO",
                  suff=["_05", "_06"],
-                 surrogate_key="SK_FUNCIONARIO").
-            pipe(dwt.merge_input,
-                 right=dim_loja,
-                 left_on="id_loja",
-                 right_on="CD_LOJA",
-                 suff=["_07", "_08"],
-                 surrogate_key="SK_LOJA").
-            pipe(pd.merge,
-                 right=stage_item_venda,
-                 left_on="id_venda",
-                 right_on="id_venda",
-                 suffixes=["_11", "_12"])
+                 surrogate_key="SK_FUNCIONARIO")
     )
 
-    #tradando as datas da dimensão produto
-    produtos = dim_produto.loc[3:].assign(
-            DT_INICIO=lambda x: x.DT_INICIO.astype('datetime64'),
-            DT_FIM=lambda x: x.DT_FIM.apply(
-                lambda y: 30000 if y == "None" or y is None else pd.to_datetime(y)
-            )
-    ).assign(
-            DT_INICIO=lambda x: x.DT_INICIO.astype(str),
-            DT_FIM=lambda x: x.DT_FIM.astype(str)
-    ).assign(
-        DT_INICIO=lambda x: x.DT_INICIO.apply(
-            lambda y: y[:13]),
-        DT_FIM=lambda x: x.DT_FIM.apply(
-            lambda y: y[:13]
-        )
-    )
-    #convertendo as datas da dimensão produto para inteiro
+    #convertendo as datas da dim_produto para inteiro
     produtos = (
-        produtos.pipe(
-            dwt.merge_input,
-                right=dim_data,
-                left_on='DT_INICIO',
-                right_on='DT_REFERENCIA',
-                suff=['_01', '_02'],
-                surrogate_key='SK_DATA').
-        pipe(
-            dwt.merge_input,
-            right=dim_data,
-            left_on='DT_FIM',
-            right_on='DT_REFERENCIA',
-            suff=['_03', '_04'],
-            surrogate_key='SK_DATA'
-        ).rename(
-            columns={
-                'SK_DATA_03': 'SK_DT_INICIO',
-                'SK_DATA_04': 'SK_DT_FIM'
-            }
-        )
+        dim_produto.loc[3:].
+            assign(
+                DT_INICIO=lambda x: x.DT_INICIO.astype('datetime64'),
+                DT_FIM=lambda x: x.DT_FIM.apply(
+                    lambda y: 
+                    pd.to_datetime('2023-01-01') if y == "None" or y is None 
+                    else pd.to_datetime(y))).
+            assign(
+                DT_INICIO=lambda x: x.DT_INICIO.astype(str),
+                DT_FIM=lambda x: x.DT_FIM.astype(str)).
+            assign(
+                DT_INICIO=lambda x: x.DT_INICIO.apply(
+                    lambda y: y[:13]),
+                DT_FIM=lambda x: x.DT_FIM.apply(
+                    lambda y: y[:13])).
+            pipe(
+                dwt.merge_input,
+                    right=dim_data,
+                    left_on='DT_INICIO',
+                    right_on='DT_REFERENCIA',
+                    suff=['_01', '_02'],
+                    surrogate_key='SK_DATA').
+            pipe(
+                dwt.merge_input,
+                    right=dim_data,
+                    left_on='DT_FIM',
+                    right_on='DT_REFERENCIA',
+                    suff=['_03', '_04'],
+                    surrogate_key='SK_DATA').
+            rename(
+                columns={
+                    'SK_DATA_03': 'SK_DT_INICIO',
+                    'SK_DATA_04': 'SK_DT_FIM'
+                }
+            )
     )
 
-    select_columns = [
-        'SK_PRODUTO',
-        'VL_PRECO_CUSTO',
-        'VL_PERCENTUAL_LUCRO'
-    ]
-
-    def merge_produto(id_produto, data_venda):
-        return produtos.query(f'CD_PRODUTO == {id_produto} & SK_DT_INICIO <= {data_venda} <= SK_DT_FIM')[select_columns]
-    #['id_produto', 'SK_DATA']
-    columns = lambda x: produtos.query(f'CD_PRODUTO == {x.id_produto} & SK_DT_INICIO <= {x.data_venda} <= SK_DT_FIM')[select_columns]
-
-    result = fact_venda.sort_values(by='id_produto').apply(lambda x: merge_produto(x['id_produto'], x['SK_DATA']), axis=1)
-    print(result)
-    """
-     #mergin com scd_produto com a fato
-    for (frow, factrows) in fact_venda.filter(items=fact_columns).iterrows():
-       print(factrows)
-           
-        result = (
-            produtos.
-                filter(items=product_columns).
-                query(f'CD_PRODUTO == {factrows.id_produto}')
+    #convertendo as datas da dim_loja para inteiro
+    lojas = (
+        dim_loja.loc[3:].
+            assign(
+                DT_INICIO=lambda x: x.DT_INICIO.astype('datetime64'),
+                DT_FIM=lambda x: x.DT_FIM.apply(
+                    lambda y: 
+                    pd.to_datetime('2023-01-01') if y == "None" or y is None 
+                    else pd.to_datetime(y)
+                )).
+            assign(
+                DT_INICIO=lambda x: x.DT_INICIO.astype(str),
+                DT_FIM=lambda x: x.DT_FIM.astype(str)).
+            assign(
+                DT_INICIO=lambda x: x.DT_INICIO.apply(
+                    lambda y: y[:13]),
+                DT_FIM=lambda x: x.DT_FIM.apply(
+                    lambda y: y[:13])).
+            pipe(
+                dwt.merge_input,
+                    right=dim_data,
+                    left_on='DT_INICIO',
+                    right_on='DT_REFERENCIA',
+                    suff=['_01', '_02'],
+                    surrogate_key='SK_DATA').
+            pipe(
+                dwt.merge_input,
+                    right=dim_data,
+                    left_on='DT_FIM',
+                    right_on='DT_REFERENCIA',
+                    suff=['_03', '_04'],
+                    surrogate_key='SK_DATA').
+            rename(
+                columns={
+                    'SK_DATA_03': 'SK_DT_INICIO',
+                    'SK_DATA_04': 'SK_DT_FIM'
+                }
         )
-        print(frow)
-        if len(result) == 1:
-            fact_venda.loc[frow, select_columns] = result.filter(items=select_columns)
-        else:
-            for (rrows, resultrows) in result.iterrows():
-                if resultrows.SK_DT_INICIO <= factrows.SK_DATA:
-                    if factrows.SK_DATA <= resultrows.SK_DT_FIM or resultrows.SK_DT_FIM == -3:
-                        fact_venda.loc[frow, 'SK_PRODUTO'] = resultrows.SK_PRODUTO.item()
-                        fact_venda.loc[frow, 'VL_PRECO_CUSTO'] = resultrows.VL_PRECO_CUSTO.item()
-                        fact_venda.loc[frow, 'VL_PERCENTUAL_LUCRO'] = resultrows.VL_PERCENTUAL_LUCRO.item()
-                    break
-    """
+    )
+    
+    fact_venda = (
+        sqldf(f'SELECT\
+            fv.*, p.SK_PRODUTO, p.VL_PRECO_CUSTO,\
+            p.VL_PERCENTUAL_LUCRO\
+            FROM fact_venda fv\
+            LEFT JOIN produtos p on fv.id_produto = p.CD_PRODUTO\
+            WHERE p.CD_PRODUTO = fv.id_produto \
+                AND p.SK_DT_INICIO <= fv.SK_DATA \
+                    AND fv.SK_DATA <= p.SK_DT_FIM;')
+    )
 
+    fact_venda = (
+        sqldf(f'SELECT\
+            fv.*, l.SK_LOJA \
+            FROM fact_venda fv\
+            LEFT JOIN lojas l on fv.id_loja = l.CD_LOJA\
+            WHERE l.CD_LOJA = fv.id_loja \
+                AND l.SK_DT_INICIO <= fv.SK_DATA \
+                    AND fv.SK_DATA <= l.SK_DT_FIM;')
+    )
+    
     return fact_venda
 
 
@@ -220,8 +214,7 @@ def treat_fact_venda(fact_tbl):
     columns_names = {
         "nfc": "NU_NFC",
         "qtd_produto": "QTD_PRODUTO",
-        "SK_DATA": "SK_DT_VENDA",
-        "SK_ENDERECO": "SK_ENDERECO_CLIENTE"
+        "SK_DATA": "SK_DT_VENDA"
     }
 
     columns_select = [
@@ -231,7 +224,6 @@ def treat_fact_venda(fact_tbl):
         "SK_LOJA",
         "SK_DT_VENDA",
         "SK_PRODUTO",
-        "SK_ENDERECO_CLIENTE",
         "NU_NFC",
         "QTD_PRODUTO",
         "VL_PRECO_CUSTO",
@@ -241,18 +233,15 @@ def treat_fact_venda(fact_tbl):
     fact_venda = (
         fact_tbl.
             rename(columns=columns_names).
-            assign(
-            SK_CLIENTE=lambda x: x.SK_CLIENTE.astype('int64'),
-            SK_ENDERECO_CLIENTE=lambda x: x.SK_ENDERECO_CLIENTE.apply(
-                lambda y: -3 if pd.isna(y) else y)).
             filter(columns_select)
     )
-    print(fact_venda.columns)
+
+   
     fact_venda = (
         pd.DataFrame([
-            [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
-            [-2, -2, -2, -2, -2, -2, -2, -2, -2, -2, -2],
-            [-3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3]
+            [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+            [-2, -2, -2, -2, -2, -2, -2, -2, -2, -2],
+            [-3, -3, -3, -3, -3, -3, -3, -3, -3, -3]
         ], columns=fact_venda.columns).append(fact_venda)
     )
 
@@ -267,13 +256,12 @@ def load_fact_venda(fact_venda, conn):
         "SK_LOJA": Integer(),
         "SK_DT_VENDA": Integer(),
         "SK_PRODUTO": Integer(),
-        "SK_ENDERECO_CLIENTE": Integer(),
         "NU_NFC": String(),
         "QTD_PRODUTO": Integer(),
         "VL_PRECO_CUSTO": Float(),
         "VL_PERCENTUAL_LUCRO": Float()
-
     }
+
     (
         fact_venda.
             to_sql(
@@ -290,9 +278,9 @@ def load_fact_venda(fact_venda, conn):
 
 def run_fact_venda(conn):
     (
-        extract_fact_venda(conn)#.
-            #pipe(treat_fact_venda).
-            #pipe(load_fact_venda, conn=conn)
+        extract_fact_venda(conn).
+            pipe(treat_fact_venda).
+            pipe(load_fact_venda, conn=conn)
     )
 
 

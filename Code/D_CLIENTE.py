@@ -12,6 +12,22 @@ def extract_dim_cliente(conn):
         table_name="STAGE_CLIENTE",
     )
 
+    dim_endereco = dwt.read_table(
+        conn=conn,
+        schema='STAGE',
+        table_name='STAGE_ENDERECO'
+    )
+
+    dim_cliente = (
+        pd.merge(
+            left=dim_cliente,
+            right=dim_endereco,
+            left_on='id_endereco',
+            right_on='id_endereco',
+            how='inner'
+        )
+    )
+    
     return dim_cliente
 
 
@@ -21,13 +37,22 @@ def treat_dim_cliente(dim_cliente):
         "nome": "NO_CLIENTE",
         "cpf": "NU_CPF",
         "tel": "NU_TELEFONE",
-        "id_endereco": "CD_ENDERECO_CLIENTE"
+        "id_endereco": "CD_ENDERECO_CLIENTE",
+        "estado": "NO_ESTADO",
+        "cidade": "NO_CIDADE",
+        "bairro": "NO_BAIRRO",
+        "rua": "DS_RUA" 
+
     }
     select_columns = [
         "id_cliente",
         "nome",
         "cpf",
-        "tel"
+        "tel",
+        "estado",
+        "cidade",
+        "bairro",
+        "rua" 
     ]
 
     dim_cliente = (
@@ -47,12 +72,12 @@ def treat_dim_cliente(dim_cliente):
 
     dim_cliente = (
         pd.DataFrame([
-            [-1, -1, "Não informado", -1, -1],
-            [-2, -2, "Não aplicável", -2, -2],
-            [-3, -3, "Desconhecido", -3, -3]
+            [-1, -1, "Não informado", -1, -1, "Não informado", "Não informado", "Não informado", "Não informado"],
+            [-2, -2, "Não aplicável", -2, -2, "Não aplicável", "Não aplicável", "Não aplicável", "Não aplicável"],
+            [-3, -3, "Desconhecido", -3, -3, "Desconhecido", "Desconhecido", "Desconhecido", "Desconhecido"]
         ], columns=dim_cliente.columns).append(dim_cliente)
     )
-
+    
     return dim_cliente
 
 

@@ -34,22 +34,22 @@ select_columns = [
 
 
 def extract_stage_loja(conn):
-    stage_loja = dwt.read_table(
+    stg_loja = dwt.read_table(
         conn=conn,
         schema='STAGE',
-        table_name='STAGE_LOJA'
+        table_name='STG_LOJA'
     )
 
-    stage_endereco = dwt.read_table(
+    stg_endereco = dwt.read_table(
         conn=conn,
         schema='STAGE',
-        table_name='STAGE_ENDERECO'
+        table_name='STG_ENDERECO'
     )
 
     stage_loja = (
-        stage_loja.pipe(
+        stg_loja.pipe(
             pd.merge,
-            right=stage_endereco,
+            right=stg_endereco,
             left_on="id_endereco",
             right_on="id_endereco",
             suffixes=["_01", "_02"],
@@ -92,7 +92,6 @@ def treat_dim_loja(stage_loja):
             [-3, -3, "Desconhecido", "Desconhecido", -3, -3, "Desconhecido", "Desconhecido", "Desconhecido", "Desconhecido", -3, None, None]
         ], columns=dim_loja.columns).append(dim_loja)
     )
-    print(dim_loja.columns)
     return dim_loja
 
 
@@ -143,7 +142,6 @@ def get_new_loja(conn):
                 FL_ATIVO=lambda x: 1,
                 DT_INICIO=lambda x: pd.to_datetime('today'),
                 DT_FIM=lambda x: None)
-
     )
 
     return insert_record

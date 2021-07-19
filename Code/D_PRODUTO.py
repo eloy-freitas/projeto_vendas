@@ -2,6 +2,7 @@ import pandas as pd
 import unidecode as uc
 import datetime as dt
 import time as t
+import numpy as np
 from sqlalchemy import Integer
 from sqlalchemy.types import String
 from sqlalchemy.types import Date
@@ -27,7 +28,7 @@ categorias = {'cafe da manhã': {"CAFE", "ACHOCOLATADO", "CEREAIS", "PAO",
                             "MOLHO", "TOMATE", "AZEITE", "OLEO", "SOJA",
                             "OVOS", "TEMPERO", "SAL", "AVEIA",
                             "EXTRATO", "ACUCAR", "SPAGHETTI"
-                            "SAZON", "CARNE", "SABOR", "FRANGO"
+                                                 "SAZON", "CARNE", "SABOR", "FRANGO"
                             },
               'carnes': {"BIFE", "FILE", "BOI", "FRANGO", "PEIXE", "CARNE", "MOIDA",
                          "SALSICHA", "LINGUICA"},
@@ -54,14 +55,14 @@ def classificar_produto(nome):
 
 
 def extract_stage_produto(conn):
-    stage_produto = dwt.read_table(
+    stg_produto = dwt.read_table(
         conn=conn,
         schema='STAGE',
-        table_name='STAGE_PRODUTO',
+        table_name='STG_PRODUTO',
         where=f'"id_produto" > 0 order by "id_produto";'
     )
 
-    return stage_produto
+    return stg_produto
 
 
 def extract_dim_produto(conn):
@@ -99,7 +100,7 @@ def treat_dim_produto(dim_produto):
             DT_CADASTRO=lambda x: x.DT_CADASTRO.apply(
                 lambda y: y[:10]),
             DT_INICIO=lambda x: x.DT_CADASTRO,
-            DT_FIM=lambda x: None).
+            DT_FIM=lambda x: pd.to_datetime('2023-01-01')).
             assign(
             DS_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
                 lambda y: classificar_produto(y))).
@@ -120,40 +121,8 @@ def treat_dim_produto(dim_produto):
             [-3, -3, "Desconhecido", -3, -3, -3, None, -3, None, None, "Desconhecido"]
         ], columns=dim_produto.columns).append(dim_produto)
     )
-    print(dim_produto.columns)
+
     return dim_produto
-
-
-def load_dim_produto(dim_produto, conn):
-    data_types = {
-        "SK_PRODUTO": Integer(),
-        "CD_PRODUTO": Integer(),
-        "NO_PRODUTO": String(),
-        "CD_BARRA": String(),
-        "VL_PRECO_CUSTO": Float(),
-        "VL_PERCENTUAL_LUCRO": Float(),
-        "DT_CADASTRO": Date(),
-        "FL_ATIVO": Integer(),
-        "DT_INICIO": Date(),
-        "DT_FIM": Date(),
-        "DT_FIM": Date(),
-        "DS_CATEGORIA": String()
-    }
-
-    (
-        dim_produto.
-            astype('string').
-            to_sql(
-            con=conn,
-            name='D_PRODUTO',
-            schema='DW',
-            if_exists='replace',
-            index=False,
-            chunksize=100,
-            dtype=data_types
-        )
-    )
-
 
 
 def get_new_produto(conn):
@@ -161,7 +130,7 @@ def get_new_produto(conn):
         dwt.read_table(
             conn=conn,
             schema='STAGE',
-            table_name='STAGE_PRODUTO').
+            table_name='STG_PRODUTO').
             assign(
             preco_custo=lambda x: x.preco_custo.apply(
                 lambda y: float(y.replace(",", "."))),
@@ -303,39 +272,56 @@ def get_updated_produto(conn):
                     "DT_FIM" = \'{pd.to_datetime("today")}\'\
                     where "CD_PRODUTO" = {cd};'
             conn.execute(sql)
-        load_new_produto(new, conn)
+        load_dim_produto(new, conn, 'append')
 
 
-def load_new_produto(insert_record, conn):
-    insert_record.to_sql(
-        con=conn,
-        name='D_PRODUTO',
-        schema='DW',
-        if_exists='append',
-        index=False,
-        chunksize=100
+def load_dim_produto(dim_produto, conn, action):
+    data_types = {
+        "SK_PRODUTO": Integer(),
+        "CD_PRODUTO": Integer(),
+        "NO_PRODUTO": String(),
+        "CD_BARRA": String(),
+        "VL_PRECO_CUSTO": Float(),
+        "VL_PERCENTUAL_LUCRO": Float(),
+        "DT_CADASTRO": Date(),
+        "FL_ATIVO": Integer(),
+        "DT_INICIO": Date(),
+        "DT_FIM": Date(),
+        "DS_CATEGORIA": String()
+    }
+
+    (
+        dim_produto.
+            astype('string').
+            to_sql(
+            con=conn,
+            name='D_PRODUTO',
+            schema='DW',
+            if_exists=action,
+            index=False,
+            chunksize=100,
+            dtype=data_types
+        )
     )
 
 
 def run_dim_produto(conn):
-    (
-        extract_stage_produto(conn).
-            pipe(treat_dim_produto)#.
-            #pipe(load_dim_produto, conn=conn)
-    )
-
-
-def run_new_produto(conn):
-    (
-        get_new_produto(conn).
-            pipe(load_new_produto, conn=conn)
-    )
-
-
-def run_update_produto(conn):
-    (
-        get_updated_produto(conn)
-    )
+    dim_produto = extract_dim_produto(conn)
+    if dim_produto.isnull:
+        (
+            extract_stage_produto(conn).
+                pipe(treat_dim_produto).
+                pipe(load_dim_produto, conn=conn, action='replace')
+        )
+    else:
+        try:
+            get_updated_produto(conn)
+            (
+                get_new_produto(conn).
+                    pipe(load_dim_produto, conn=conn, action='append')
+            )
+        except:
+            print("nada para atualizar")
 
 
 if __name__ == "__main__":
@@ -349,8 +335,6 @@ if __name__ == "__main__":
 
     start = t.time()
     run_dim_produto(conn_dw)
-    #run_new_produto(conn_dw)
-    #run_update_produto(conn_dw)
 
     exec_time = t.time() - start
     print(f"exec_time = {exec_time}")

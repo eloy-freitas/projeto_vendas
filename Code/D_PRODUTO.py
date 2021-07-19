@@ -2,6 +2,10 @@ import pandas as pd
 import unidecode as uc
 import datetime as dt
 import time as t
+from sqlalchemy import Integer
+from sqlalchemy.types import String
+from sqlalchemy.types import Date
+from sqlalchemy.types import Float
 from CONEXAO import create_connection_postgre
 import DW_TOOLS as dwt
 
@@ -111,24 +115,45 @@ def treat_dim_produto(dim_produto):
 
     dim_produto = (
         pd.DataFrame([
-            [-1, -1, "Não informado", -1, -1, -1, -1, -1, -1, -1, "Não informado"],
-            [-2, -2, "Não aplicável", -2, -2, -2, -2, -2, -2, -2, "Não aplicável"],
-            [-3, -3, "Desconhecido", -3, -3, -3, -3, -3, -3, -3, "Desconhecido"]
+            [-1, -1, "Não informado", -1, -1, -1, None, -1, None, None, "Não informado"],
+            [-2, -2, "Não aplicável", -2, -2, -2, None, -2, None, None, "Não aplicável"],
+            [-3, -3, "Desconhecido", -3, -3, -3, None, -3, None, None, "Desconhecido"]
         ], columns=dim_produto.columns).append(dim_produto)
     )
-
+    print(dim_produto.columns)
     return dim_produto
 
 
 def load_dim_produto(dim_produto, conn):
-    dim_produto.to_sql(
-        con=conn,
-        name='D_PRODUTO',
-        schema='DW',
-        if_exists='replace',
-        index=False,
-        chunksize=100
+    data_types = {
+        "SK_PRODUTO": Integer(),
+        "CD_PRODUTO": Integer(),
+        "NO_PRODUTO": String(),
+        "CD_BARRA": String(),
+        "VL_PRECO_CUSTO": Float(),
+        "VL_PERCENTUAL_LUCRO": Float(),
+        "DT_CADASTRO": Date(),
+        "FL_ATIVO": Integer(),
+        "DT_INICIO": Date(),
+        "DT_FIM": Date(),
+        "DT_FIM": Date(),
+        "DS_CATEGORIA": String()
+    }
+
+    (
+        dim_produto.
+            astype('string').
+            to_sql(
+            con=conn,
+            name='D_PRODUTO',
+            schema='DW',
+            if_exists='replace',
+            index=False,
+            chunksize=100,
+            dtype=data_types
+        )
     )
+
 
 
 def get_new_produto(conn):
@@ -295,8 +320,8 @@ def load_new_produto(insert_record, conn):
 def run_dim_produto(conn):
     (
         extract_stage_produto(conn).
-            pipe(treat_dim_produto).
-            pipe(load_dim_produto, conn=conn)
+            pipe(treat_dim_produto)#.
+            #pipe(load_dim_produto, conn=conn)
     )
 
 
@@ -313,9 +338,6 @@ def run_update_produto(conn):
     )
 
 
-
-
-
 if __name__ == "__main__":
     conn_dw = create_connection_postgre(
         server="192.168.3.2",
@@ -326,9 +348,9 @@ if __name__ == "__main__":
     )
 
     start = t.time()
-    #run_dim_produto(conn_dw)
+    run_dim_produto(conn_dw)
     #run_new_produto(conn_dw)
-    run_update_produto(conn_dw)
+    #run_update_produto(conn_dw)
 
     exec_time = t.time() - start
     print(f"exec_time = {exec_time}")

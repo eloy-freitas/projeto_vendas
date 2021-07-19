@@ -278,9 +278,9 @@ def load_fact_venda(fact_venda, conn):
 
 def run_fact_venda(conn):
     (
-        extract_fact_venda(conn).
-            pipe(treat_fact_venda).
-            pipe(load_fact_venda, conn=conn)
+        extract_fact_venda(conn)#.
+            #pipe(treat_fact_venda).
+            #pipe(load_fact_venda, conn=conn)
     )
 
 

@@ -1,7 +1,8 @@
 import pandas as pd
 import time as t
 from CONEXAO import create_connection_postgre
-from tools import insert_data
+from sqlalchemy import Integer
+from sqlalchemy.types import String
 import DW_TOOLS as dwt
 
 def extract_dim_forma_pagamento(conn):
@@ -56,14 +57,26 @@ def treat_dim_forma_pagamento(dim_forma_pagamento):
 
 
 def load_dim_forma_pagamento(dim_forma_pagamento, conn):
-    dim_forma_pagamento.to_sql(
-        con=conn,
-        name='D_FORMA_PAGAMENTO',
-        schema='DW',
-        if_exists='replace',
-        index=False,
-        chunksize=100
+    data_types = {
+        "SK_FORMA_PAGAMENTO": Integer(),
+        "CD_FORMA_PAGAMENTO": Integer(),
+        "NO_FORMA_PAGAMENTO": String(),
+        "DS_FORMA_PAGAMENTO": String()
+    }
+
+    (
+        dim_forma_pagamento.
+            astype('string').
+            to_sql(
+            con=conn,
+            name='D_FORMA_PAGAMENTO',
+            schema='DW',
+            if_exists='replace',
+            index=False,
+            chunksize=100
+        )
     )
+
 
 def run_dim_forma_pagamento(conn):
     (

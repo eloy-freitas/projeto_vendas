@@ -1,7 +1,9 @@
 import pandas as pd
 import time as t
 from CONEXAO import create_connection_postgre
-from tools import insert_data, get_data_from_database
+from sqlalchemy import Integer
+from sqlalchemy.types import String
+from sqlalchemy.types import Date
 import DW_TOOLS as dwt
 
 
@@ -34,20 +36,19 @@ def treat_dim_funcionario(dim_funcionario):
 
     dim_funcionario = (
         dim_funcionario.
-        filter(select_columns).
-        rename(columns=columns_names).
-        assign(
+            filter(select_columns).
+            rename(columns=columns_names).
+            assign(
             DT_NASCIMENTO=lambda x: x.DT_NASCIMENTO.astype('datetime64'))
     )
 
-    dim_funcionario.\
-        insert(0, 'SK_FUNCIONARIO', range(1, 1 + len(dim_funcionario)))
+    dim_funcionario.insert(0, 'SK_FUNCIONARIO', range(1, 1 + len(dim_funcionario)))
 
     dim_funcionario = (
         pd.DataFrame([
-            [-1, -1, "Não informado", -1, -1, -1],
-            [-2, -2, "Não aplicável", -2, -2, -2],
-            [-3, -3, "Desconhecido", -3, -3, -3]
+            [-1, -1, "Não informado", -1, -1, None],
+            [-2, -2, "Não aplicável", -2, -2, None],
+            [-3, -3, "Desconhecido", -3, -3, None]
         ], columns=dim_funcionario.columns).append(dim_funcionario)
     )
 
@@ -55,21 +56,36 @@ def treat_dim_funcionario(dim_funcionario):
 
 
 def load_dim_funcionario(dim_funcionario, conn):
-    dim_funcionario.to_sql(
-        con=conn,
-        name='D_FUNCIONARIO',
-        schema='DW',
-        if_exists='replace',
-        index=False,
-        chunksize=100
+    data_types = {
+        "SK_FUNCIONARIO": Integer(),
+        "CD_FUNCIONARIO": Integer(),
+        "NO_FUNCIONARIO": String(),
+        "NU_CPF": String(),
+        "NU_TELEFONE": String(),
+        "DT_NASCIMENTO": Date()
+    }
+
+    (
+        dim_funcionario.
+            astype('string').
+            to_sql(
+            con=conn,
+            name='D_FUNCIONARIO',
+            schema='DW',
+            if_exists='replace',
+            index=False,
+            chunksize=100,
+            dtype=data_types
+        )
+
     )
 
 
 def run_dim_funcionario(conn):
     (
         extract_dim_funcionario(conn).
-        pipe(treat_dim_funcionario).
-        pipe(load_dim_funcionario, conn=conn)
+            pipe(treat_dim_funcionario).
+            pipe(load_dim_funcionario, conn=conn)
     )
 
 

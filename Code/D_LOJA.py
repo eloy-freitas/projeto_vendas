@@ -1,6 +1,9 @@
 import pandas as pd
 import datetime as dt
 import time as t
+from sqlalchemy import Integer
+from sqlalchemy.types import String
+from sqlalchemy.types import Date
 from CONEXAO import create_connection_postgre
 import DW_TOOLS as dwt
 
@@ -84,12 +87,12 @@ def treat_dim_loja(stage_loja):
 
     dim_loja = (
         pd.DataFrame([
-            [-1, -1, "Não informado", "Não informado", -1, -1, "Não informado", "Não informado", "Não informado", "Não informado", -1, -1, -1],
-            [-2, -2, "Não aplicável", "Não aplicável", -2, -2, "Não aplicável", "Não aplicável", "Não aplicável", "Não aplicável", -2, -2, -2],
-            [-3, -3, "Desconhecido", "Desconhecido", -3, -3, "Desconhecido", "Desconhecido", "Desconhecido", "Desconhecido", -3, -3, -3]
+            [-1, -1, "Não informado", "Não informado", -1, -1, "Não informado", "Não informado", "Não informado", "Não informado", -1, None, None],
+            [-2, -2, "Não aplicável", "Não aplicável", -2, -2, "Não aplicável", "Não aplicável", "Não aplicável", "Não aplicável", -2, None, None],
+            [-3, -3, "Desconhecido", "Desconhecido", -3, -3, "Desconhecido", "Desconhecido", "Desconhecido", "Desconhecido", -3, None, None]
         ], columns=dim_loja.columns).append(dim_loja)
     )
-
+    print(dim_loja.columns)
     return dim_loja
 
 
@@ -223,14 +226,36 @@ def load_updated_loja(updated_values, conn):
 
 
 def load_dim_loja(dim_loja, conn):
-   dim_loja.to_sql(
-        con=conn,
-        name='D_LOJA',
-        schema='DW',
-        if_exists='replace',
-        index=False,
-        chunksize=100
-    ) 
+    data_types = {
+        "SK_LOJA": Integer(),
+        "CD_LOJA": Integer(),
+        "NO_LOJA": String(),
+        "DS_RAZAO_SOCIAL": String(),
+        "NU_CNPJ": String(),
+        "NU_TELEFONE": String(),
+        "NO_ESTADO": String(),
+        "NO_CIDADE": String(),
+        "NO_BAIRRO": String,
+        "DS_RUA": String(),
+        "FL_ATIVO": Integer(),
+        "DT_INICIO": Date(),
+        "DT_FIM": Date()
+    }
+
+    (
+        dim_loja.
+            astype('string').
+            to_sql(
+            con=conn,
+            name='D_LOJA',
+            schema='DW',
+            if_exists='replace',
+            index=False,
+            chunksize=100,
+            dtype=data_types
+        )
+    )
+
 
 
 def run_updated_loja(conn):
@@ -250,8 +275,8 @@ def run_new_loja(conn):
 def run_dim_loja(conn):
     (
         extract_stage_loja(conn=conn).
-            pipe(treat_dim_loja).
-            pipe(load_dim_loja, conn=conn)
+            pipe(treat_dim_loja)#.
+            #pipe(load_dim_loja, conn=conn)
     )
 
 
@@ -266,7 +291,7 @@ if __name__ == "__main__":
 
     start = t.time()
     #run_new_loja(conn_dw)
-    run_updated_loja(conn_dw)
-    #run_dim_loja(conn_dw)
+    #run_updated_loja(conn_dw)
+    run_dim_loja(conn_dw)
     exec_time = t.time() - start
     print(f"exec_time = {exec_time}")

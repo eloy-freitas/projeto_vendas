@@ -1,18 +1,19 @@
 import pandas as pd
 import time as t
+from sqlalchemy import Integer
+from sqlalchemy.types import String
 from CONEXAO import create_connection_postgre
-from tools import insert_data
 import DW_TOOLS as dwt
 
 
 def extract_dim_cliente(conn):
-    dim_cliente = dwt.read_table(
+    stg_cliente = dwt.read_table(
         conn=conn,
         schema="STAGE",
         table_name="STAGE_CLIENTE",
     )
 
-    dim_endereco = dwt.read_table(
+    stg_endereco = dwt.read_table(
         conn=conn,
         schema='STAGE',
         table_name='STAGE_ENDERECO'
@@ -20,8 +21,8 @@ def extract_dim_cliente(conn):
 
     dim_cliente = (
         pd.merge(
-            left=dim_cliente,
-            right=dim_endereco,
+            left=stg_cliente,
+            right=stg_endereco,
             left_on='id_endereco',
             right_on='id_endereco',
             how='inner'
@@ -82,14 +83,32 @@ def treat_dim_cliente(dim_cliente):
 
 
 def load_dim_cliente(dim_cliente, conn):
-    dim_cliente.to_sql(
-        con=conn,
-        name='D_CLIENTE',
-        schema='DW',
-        if_exists='replace',
-        index=False,
-        chunksize=100
+    data_type = {
+        "SK_CLIENTE": Integer(),
+        "CD_CLIENTE": Integer(),
+        "NO_CLIENTE": String(),
+        "NU_CPF": String(),
+        "NU_TELEFONE": String(),
+        "CD_ENDERECO_CLIENTE": String(),
+        "NO_ESTADO": String(),
+        "NO_CIDADE": String(),
+        "NO_BAIRRO": String(),
+        "DS_RUA": String()
+    }
+    (
+        dim_cliente.
+            astype('string').
+            to_sql(
+            con=conn,
+            name='D_CLIENTE',
+            schema='DW',
+            if_exists='replace',
+            index=False,
+            chunksize=100,
+            dtype=data_type
+        )
     )
+
 
 
 def run_dim_cliente(conn):

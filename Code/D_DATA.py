@@ -1,7 +1,9 @@
 import pandas as pd
 import time as t
+from sqlalchemy import Integer
+from sqlalchemy.types import String
+from sqlalchemy.types import Date
 from CONEXAO import create_connection_postgre
-from tools import insert_data
 
 
 def treat_dim_data():
@@ -36,9 +38,9 @@ def treat_dim_data():
 
     dim_data = (
         pd.DataFrame([
-            [-1, -1, -1, -1, -1, -1, -1, "Não informado", -1, "Não informado"],
-            [-2, -2, -2, -2, -2, -2, -2, "Não aplicável", -2, "Não aplicável"],
-            [-3, -3, -3, -3, -3, -3, -3, "Desconhecido", -3, "Desconhecido"]
+            [-1, None, -1, -1, -1, -1, -1, "Não informado", -1, "Não informado"],
+            [-2, None, -2, -2, -2, -2, -2, "Não aplicável", -2, "Não aplicável"],
+            [-3, None, -3, -3, -3, -3, -3, "Desconhecido", -3, "Desconhecido"]
         ], columns=dim_data.columns).append(dim_data)
     )
 
@@ -46,14 +48,31 @@ def treat_dim_data():
 
 
 def load_dim_data(dim_data, conn):
-    dim_data.to_sql(
-        con=conn,
-        name='D_DATA',
-        schema='DW',
-        if_exists='replace',
-        index=False,
-        chunksize=100
+    data_types = {
+        "SK_DATA": Integer(),
+        "DT_REFERENCIA": Date(),
+        "DT_ANO": Integer(),
+        "DT_MES": Integer(),
+        "DT_TRIMESTE": Integer(),
+        "DT_DIA": Integer(),
+        "DT_SEMANA": Integer(),
+        "DS_DIA": String(),
+        "DT_HORA": Integer(),
+        "DS_TURNO": String()
+    }
+    (
+        dim_data.astype('string').
+            to_sql(
+            con=conn,
+            name='D_DATA',
+            schema='DW',
+            if_exists='replace',
+            index=False,
+            chunksize=100,
+            dtype=data_types
+        )
     )
+
 
 
 def run_dim_data(conn):

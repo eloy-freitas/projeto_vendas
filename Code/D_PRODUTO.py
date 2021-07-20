@@ -2,14 +2,15 @@ import pandas as pd
 import unidecode as uc
 import datetime as dt
 import time as t
-import numpy as np
 from sqlalchemy import Integer
 from sqlalchemy.types import String
 from sqlalchemy.types import Date
 from sqlalchemy.types import Float
+from pandasql import sqldf
 from CONEXAO import create_connection_postgre
 import DW_TOOLS as dwt
 
+pd.set_option('display.max_columns', None)
 columns_names = {
     "id_produto": "CD_PRODUTO",
     "nome_produto": "NO_PRODUTO",
@@ -66,16 +67,18 @@ def extract_stage_produto(conn):
 
 
 def extract_dim_produto(conn):
-    dim_produto = dwt.read_table(
-        conn=conn,
-        schema='DW',
-        table_name='D_PRODUTO',
-        where=f'"CD_PRODUTO" > 0 \
-        and "FL_ATIVO" = 1 \
-        order by "SK_PRODUTO";'
-    )
-
-    return dim_produto
+    try:
+        dim_produto = dwt.read_table(
+            conn=conn,
+            schema='DW',
+            table_name='D_PRODUTO',
+            where=f'"CD_PRODUTO" > 0 \
+            and "FL_ATIVO" = 1\
+            order by "CD_PRODUTO";'
+        )
+        return dim_produto
+    except:
+        return None
 
 
 def treat_dim_produto(dim_produto):
@@ -99,15 +102,13 @@ def treat_dim_produto(dim_produto):
                 lambda y: float(y.replace(",", "."))),
             DT_CADASTRO=lambda x: x.DT_CADASTRO.apply(
                 lambda y: y[:10]),
-            DT_INICIO=lambda x: x.DT_CADASTRO,
+            DT_INICIO=lambda x: pd.to_datetime(x.DT_CADASTRO),
             DT_FIM=lambda x: pd.to_datetime('2023-01-01')).
             assign(
             DS_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
                 lambda y: classificar_produto(y))).
             assign(
-            DT_CADASTRO=lambda x: x.DT_CADASTRO.astype(str),
-            DT_INICIO=lambda x: x.DT_INICIO.astype(str),
-            DT_FIM=lambda x: x.DT_FIM.astype(str),
+            DT_CADASTRO=lambda x: pd.to_datetime(x.DT_CADASTRO),
             NO_PRODUTO=lambda x: x.NO_PRODUTO.astype(str),
             FL_ATIVO=lambda x: x.FL_ATIVO.astype("int64"))
     )
@@ -125,6 +126,175 @@ def treat_dim_produto(dim_produto):
     return dim_produto
 
 
+def get_updated_produto(conn):
+    select_columns = [
+        "CD_PRODUTO",
+        "NO_PRODUTO",
+        "CD_BARRA",
+        "DT_CADASTRO",
+        "VL_PRECO_CUSTO",
+        "VL_PERCENTUAL_LUCRO"
+    ]
+
+    stg_source = (
+        extract_stage_produto(conn).
+            rename(columns=columns_names).
+            assign(
+            VL_PRECO_CUSTO=lambda x:
+            x.VL_PRECO_CUSTO.apply(lambda y:
+                                   float(y.replace(",", "."))),
+            VL_PERCENTUAL_LUCRO=lambda x:
+            x.VL_PERCENTUAL_LUCRO.apply(lambda y:
+                                        float(y.replace(",", "."))),
+            DT_CADASTRO=lambda x: x.DT_CADASTRO.apply(
+                lambda y: y[:10])).
+            assign(DT_CADASTRO=lambda x: x.DT_CADASTRO.astype("datetime64"))
+    )
+
+    dw_source = extract_dim_produto(conn)
+
+    df_dw = dw_source.filter(items=select_columns)
+    df_stage = stg_source.filter(items=select_columns)
+
+    new_records = (
+         sqldf("SELECT df_stage.*\
+                FROM df_stage\
+                LEFT JOIN df_dw \
+                ON (df_stage.CD_PRODUTO = df_dw.CD_PRODUTO)\
+                WHERE df_dw.CD_PRODUTO IS NULL")
+        )
+
+    new_updates = (
+        sqldf(f"select stg.* \
+                from df_stage stg \
+                inner join df_dw dw \
+                on stg.CD_PRODUTO = dw.CD_PRODUTO \
+                where stg.CD_BARRA != dw.CD_BARRA\
+                or stg.VL_PRECO_CUSTO != dw.VL_PRECO_CUSTO\
+                or stg.VL_PERCENTUAL_LUCRO != dw.VL_PERCENTUAL_LUCRO")
+    )
+
+    names_updateds = (
+        sqldf(f"select stg.* \
+                    from df_stage stg \
+                    inner join df_dw dw \
+                    on stg.CD_PRODUTO = dw.CD_PRODUTO \
+                    where stg.NO_PRODUTO != dw.NO_PRODUTO")
+    )
+
+    size = dw_source['SK_PRODUTO'].max() + 1
+    if len(new_updates) > 0 or len(names_updateds) > 0:
+        # identificando index das linhas alteradas
+        new_updates.insert(0, 'SK_PRODUTO', range(size, size + len(new_updates)))
+
+        # extraindo linhas que serão atualizadas
+        updated_values = (
+            new_updates.assign(
+                DT_INICIO=lambda x: pd.to_datetime("today"),
+                DT_FIM=lambda x: pd.to_datetime('2023-01-01'),
+                FL_ATIVO=lambda x: 1,
+                DT_CADASTRO=lambda x: x.DT_CADASTRO.astype("datetime64"),
+                DS_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
+                    lambda y: classificar_produto(y))
+            )
+        )
+
+        # identificando as sks que precisam ser atualizadas
+        for cd in updated_values['CD_PRODUTO']:
+            sql = f'update "DW"."D_PRODUTO"\
+                    set "FL_ATIVO" = {0},\
+                    "DT_FIM" = \'{pd.to_datetime("today")}\'\
+                    where "CD_PRODUTO" = {cd};'
+            conn.execute(sql)
+
+        for cd in names_updateds['CD_PRODUTO']:
+            nome = names_updateds.query(f"CD_PRODUTO == {cd}")["NO_PRODUTO"].item()
+            sql = f'update "DW"."D_PRODUTO"\
+                set "NO_PRODUTO" = \'{str(nome)}\'\
+                 where "CD_PRODUTO" = {cd} and "FL_ATIVO" = 1;'
+            conn.execute(sql)
+
+        return updated_values
+    if len(new_records) > 0:
+        insert_records = (
+            new_records.assign(
+            DT_INICIO=lambda x: pd.to_datetime('today'),
+            DT_FIM=lambda x: pd.to_datetime('2023-01-01'),
+            DS_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
+                lambda y: classificar_produto(y)),
+            DT_CADASTRO=lambda x: x.DT_CADASTRO.astype("datetime64"),
+            NO_PRODUTO=lambda x: x.NO_PRODUTO.astype(str),
+            FL_ATIVO=lambda x: 1
+            )
+        )
+
+        insert_records.insert(0, 'SK_PRODUTO', range(size, size + len(new_records)))
+        return insert_records
+
+
+def load_dim_produto(dim_produto, conn, action):
+    data_types = {
+        "SK_PRODUTO": Integer(),
+        "CD_PRODUTO": Integer(),
+        "NO_PRODUTO": String(),
+        "CD_BARRA": String(),
+        "VL_PRECO_CUSTO": Float(),
+        "VL_PERCENTUAL_LUCRO": Float(),
+        "DT_CADASTRO": Date(),
+        "FL_ATIVO": Integer(),
+        "DT_INICIO": Date(),
+        "DT_FIM": Date(),
+        "DS_CATEGORIA": String()
+    }
+
+    (
+        dim_produto.
+            astype('string').
+            to_sql(
+            con=conn,
+            name='D_PRODUTO',
+            schema='DW',
+            if_exists=action,
+            index=False,
+            chunksize=100,
+            dtype=data_types
+        )
+    )
+
+
+def run_dim_produto(conn):
+    dim_produto = extract_dim_produto(conn)
+    if dim_produto is None:
+        (
+            extract_stage_produto(conn).
+                pipe(treat_dim_produto).
+                pipe(load_dim_produto, conn=conn, action='replace')
+
+        )
+    else:
+        (
+            get_updated_produto(conn).
+                pipe(load_dim_produto, conn=conn, action='append')
+        )
+
+
+if __name__ == "__main__":
+    conn_dw = create_connection_postgre(
+        server="192.168.3.2",
+        database="projeto_dw_vendas",
+        username="itix",
+        password="itix123",
+        port="5432"
+    )
+
+    start = t.time()
+    run_dim_produto(conn_dw)
+
+    exec_time = t.time() - start
+    print(f"exec_time = {exec_time}")
+
+
+"""
 def get_new_produto(conn):
     df_stage = (
         dwt.read_table(
@@ -179,7 +349,7 @@ def get_new_produto(conn):
             rename(columns=columns_names)
             .assign(
             DT_INICIO=lambda x: dt.date(2020, 1, 1),
-            DT_FIM=lambda x: None,
+            DT_FIM=lambda x: pd.to_datetime('2023-01-01'),
             SK_PRODUTO=lambda x: range(max_cd_dw,
                                        (max_cd_dw + size))).
             assign(
@@ -191,150 +361,4 @@ def get_new_produto(conn):
     )
 
     return insert_record
-
-
-def get_updated_produto(conn):
-    select_columns = [
-        "CD_PRODUTO",
-        "NO_PRODUTO",
-        "CD_BARRA",
-        "DT_CADASTRO",
-        "VL_PRECO_CUSTO",
-        "VL_PERCENTUAL_LUCRO"
-    ]
-
-    df_stage = (
-        extract_stage_produto(conn).
-            rename(columns=columns_names).
-            assign(
-            VL_PRECO_CUSTO=lambda x:
-            x.VL_PRECO_CUSTO.apply(lambda y:
-                                   float(y.replace(",", "."))),
-            VL_PERCENTUAL_LUCRO=lambda x:
-            x.VL_PERCENTUAL_LUCRO.apply(lambda y:
-                                        float(y.replace(",", "."))),
-            DT_CADASTRO=lambda x: x.DT_CADASTRO.apply(
-                lambda y: y[:10])
-        )
-    )
-
-    df_dw = extract_dim_produto(conn)
-
-    concated_dfs = pd.concat([
-        df_dw.filter(items=select_columns),
-        df_stage.filter(items=select_columns)
-    ])
-    df = concated_dfs.reset_index(drop=True)
-    df_gpby = df.groupby(list(df.columns))
-    idx = [x[0] for x in df_gpby.groups.values() if len(x) == 1]
-    idx_dw = list(df.reindex(idx)['CD_PRODUTO'].unique())
-    old = (
-        df_dw.
-            query(f'CD_PRODUTO == {idx_dw}').
-            reset_index().
-            filter(items=select_columns)
-    )
-    new = (
-        df_stage.
-            query(f'CD_PRODUTO == {idx_dw}').
-            reset_index().
-            filter(items=select_columns)
-    )
-
-    if new['NO_PRODUTO'].all() != old['NO_PRODUTO'].all():
-        for cd in idx_dw:
-            nome = new.query(f"CD_PRODUTO == {cd}")["NO_PRODUTO"].item()
-            sql = f'update "DW"."D_PRODUTO"\
-                set "NO_PRODUTO" = \'{str(nome)}\'\
-                where "CD_PRODUTO" = {cd} and "FL_ATIVO" = 1;'
-            conn.execute(sql)
-    else:
-        # identificando index das linhas alteradas
-        size = df_dw['SK_PRODUTO'].max() + 1
-
-        new.insert(0, 'SK_PRODUTO', range(size, size + len(new)))
-
-        # extraindo linhas que serão atualizadas
-        new = (
-            new.assign(
-                DT_INICIO=lambda x: pd.to_datetime("today"),
-                DT_FIM=lambda x: None,
-                FL_ATIVO=lambda x: 1,
-                DS_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
-                    lambda y: classificar_produto(y))
-            )
-        )
-
-        # identificando as sks que precisam ser atualizadas
-        for cd in idx_dw:
-            sql = f'update "DW"."D_PRODUTO"\
-                    set "FL_ATIVO" = {0},\
-                    "DT_FIM" = \'{pd.to_datetime("today")}\'\
-                    where "CD_PRODUTO" = {cd};'
-            conn.execute(sql)
-        load_dim_produto(new, conn, 'append')
-
-
-def load_dim_produto(dim_produto, conn, action):
-    data_types = {
-        "SK_PRODUTO": Integer(),
-        "CD_PRODUTO": Integer(),
-        "NO_PRODUTO": String(),
-        "CD_BARRA": String(),
-        "VL_PRECO_CUSTO": Float(),
-        "VL_PERCENTUAL_LUCRO": Float(),
-        "DT_CADASTRO": Date(),
-        "FL_ATIVO": Integer(),
-        "DT_INICIO": Date(),
-        "DT_FIM": Date(),
-        "DS_CATEGORIA": String()
-    }
-
-    (
-        dim_produto.
-            astype('string').
-            to_sql(
-            con=conn,
-            name='D_PRODUTO',
-            schema='DW',
-            if_exists=action,
-            index=False,
-            chunksize=100,
-            dtype=data_types
-        )
-    )
-
-
-def run_dim_produto(conn):
-    dim_produto = extract_dim_produto(conn)
-    if dim_produto.isnull:
-        (
-            extract_stage_produto(conn).
-                pipe(treat_dim_produto).
-                pipe(load_dim_produto, conn=conn, action='replace')
-        )
-    else:
-        try:
-            get_updated_produto(conn)
-            (
-                get_new_produto(conn).
-                    pipe(load_dim_produto, conn=conn, action='append')
-            )
-        except:
-            print("nada para atualizar")
-
-
-if __name__ == "__main__":
-    conn_dw = create_connection_postgre(
-        server="192.168.3.2",
-        database="projeto_dw_vendas",
-        username="itix",
-        password="itix123",
-        port="5432"
-    )
-
-    start = t.time()
-    run_dim_produto(conn_dw)
-
-    exec_time = t.time() - start
-    print(f"exec_time = {exec_time}")
+"""

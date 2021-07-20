@@ -169,8 +169,7 @@ def get_updated_produto(conn):
                 from df_stage stg \
                 inner join df_dw dw \
                 on stg.CD_PRODUTO = dw.CD_PRODUTO \
-                where stg.CD_BARRA != dw.CD_BARRA\
-                or stg.VL_PRECO_CUSTO != dw.VL_PRECO_CUSTO\
+                where stg.VL_PRECO_CUSTO != dw.VL_PRECO_CUSTO\
                 or stg.VL_PERCENTUAL_LUCRO != dw.VL_PERCENTUAL_LUCRO")
     )
 
@@ -184,8 +183,7 @@ def get_updated_produto(conn):
 
     size = dw_source['SK_PRODUTO'].max() + 1
     if len(new_updates) > 0 or len(names_updateds) > 0:
-        # identificando index das linhas alteradas
-        new_updates.insert(0, 'SK_PRODUTO', range(size, size + len(new_updates)))
+
 
         # extraindo linhas que serão atualizadas
         updated_values = (
@@ -199,12 +197,14 @@ def get_updated_produto(conn):
             )
         )
 
+        new_updates.insert(0, 'SK_PRODUTO', range(size, size + len(new_updates)))
+
         # identificando as sks que precisam ser atualizadas
         for cd in updated_values['CD_PRODUTO']:
             sql = f'update "DW"."D_PRODUTO"\
                     set "FL_ATIVO" = {0},\
                     "DT_FIM" = \'{pd.to_datetime("today")}\'\
-                    where "CD_PRODUTO" = {cd};'
+                    where "CD_PRODUTO" = {cd} and "FL_ATIVO" = 1;'
             conn.execute(sql)
 
         for cd in names_updateds['CD_PRODUTO']:
@@ -215,6 +215,7 @@ def get_updated_produto(conn):
             conn.execute(sql)
 
         return updated_values
+
     if len(new_records) > 0:
         insert_records = (
             new_records.assign(
@@ -289,76 +290,5 @@ if __name__ == "__main__":
 
     start = t.time()
     run_dim_produto(conn_dw)
-
     exec_time = t.time() - start
     print(f"exec_time = {exec_time}")
-
-
-"""
-def get_new_produto(conn):
-    df_stage = (
-        dwt.read_table(
-            conn=conn,
-            schema='STAGE',
-            table_name='STG_PRODUTO').
-            assign(
-            preco_custo=lambda x: x.preco_custo.apply(
-                lambda y: float(y.replace(",", "."))),
-            percentual_lucro=lambda x: x.percentual_lucro.apply(
-                lambda y: float(y.replace(",", ".")))
-        )
-    )
-
-    df_dw = dwt.read_table(
-        conn=conn,
-        schema='DW',
-        table_name='D_PRODUTO',
-        where='"SK_PRODUTO" > 0'
-    )
-
-    join_df = (
-        pd.merge(
-            left=df_stage,
-            right=df_dw,
-            left_on='id_produto',
-            right_on="CD_PRODUTO",
-            how='left').
-            assign(
-            FL_INSERT=lambda x: x.CD_PRODUTO.apply(
-                lambda y: 'I' if pd.isnull(y) else 'N')
-        )
-    )
-
-    max_cd_dw = df_dw['SK_PRODUTO'].max() + 1
-    size = max_cd_dw + join_df.query(f'FL_INSERT == "I"').shape[0] - max_cd_dw
-    columns = [
-        "SK_PRODUTO",
-        "id_produto",
-        "nome_produto",
-        "cod_barra",
-        "preco_custo",
-        "percentual_lucro",
-        "data_cadastro",
-        "ativo",
-        "DT_INICIO",
-        "DT_FIM"]
-
-    insert_record = (
-        join_df.
-            query("FL_INSERT == 'I'")[columns].
-            rename(columns=columns_names)
-            .assign(
-            DT_INICIO=lambda x: dt.date(2020, 1, 1),
-            DT_FIM=lambda x: pd.to_datetime('2023-01-01'),
-            SK_PRODUTO=lambda x: range(max_cd_dw,
-                                       (max_cd_dw + size))).
-            assign(
-            DS_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
-                lambda y: classificar_produto(y))).
-            assign(
-            DT_CADASTRO=lambda x: x.DT_CADASTRO.astype("datetime64"),
-            NO_PRODUTO=lambda x: x.NO_PRODUTO.astype(str))
-    )
-
-    return insert_record
-"""

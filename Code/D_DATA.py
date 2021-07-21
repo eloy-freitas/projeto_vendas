@@ -2,7 +2,7 @@ import pandas as pd
 import time as t
 from sqlalchemy import Integer
 from sqlalchemy.types import String
-from sqlalchemy.types import Date
+from sqlalchemy.types import DateTime
 from CONEXAO import create_connection_postgre
 
 
@@ -50,7 +50,7 @@ def treat_dim_data():
 def load_dim_data(dim_data, conn):
     data_types = {
         "SK_DATA": Integer(),
-        "DT_REFERENCIA": Date(),
+        "DT_REFERENCIA": DateTime(),
         "DT_ANO": Integer(),
         "DT_MES": Integer(),
         "DT_TRIMESTE": Integer(),
@@ -72,7 +72,6 @@ def load_dim_data(dim_data, conn):
             dtype=data_types
         )
     )
-
 
 
 def run_dim_data(conn):

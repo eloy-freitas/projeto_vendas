@@ -5,11 +5,12 @@ from sqlalchemy import Integer
 from sqlalchemy.types import String
 import DW_TOOLS as dwt
 
+
 def extract_dim_forma_pagamento(conn):
     dim_forma_pagamento = dwt.read_table(
         conn=conn,
         schema="STAGE",
-        table_name="STAGE_FORMA_PAGAMENTO"
+        table_name="STG_FORMA_PAGAMENTO"
     )
 
     return dim_forma_pagamento
@@ -73,7 +74,8 @@ def load_dim_forma_pagamento(dim_forma_pagamento, conn):
             schema='DW',
             if_exists='replace',
             index=False,
-            chunksize=100
+            chunksize=100,
+            dtype=data_types
         )
     )
 

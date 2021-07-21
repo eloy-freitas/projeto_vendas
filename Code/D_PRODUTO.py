@@ -1,10 +1,9 @@
 import pandas as pd
 import unidecode as uc
-import datetime as dt
 import time as t
 from sqlalchemy import Integer
 from sqlalchemy.types import String
-from sqlalchemy.types import Date
+from sqlalchemy.types import DateTime
 from sqlalchemy.types import Float
 from pandasql import sqldf
 from CONEXAO import create_connection_postgre
@@ -241,10 +240,10 @@ def load_dim_produto(dim_produto, conn, action):
         "CD_BARRA": String(),
         "VL_PRECO_CUSTO": Float(),
         "VL_PERCENTUAL_LUCRO": Float(),
-        "DT_CADASTRO": Date(),
+        "DT_CADASTRO": DateTime(),
         "FL_ATIVO": Integer(),
-        "DT_INICIO": Date(),
-        "DT_FIM": Date(),
+        "DT_INICIO": DateTime(),
+        "DT_FIM": DateTime(),
         "DS_CATEGORIA": String()
     }
 

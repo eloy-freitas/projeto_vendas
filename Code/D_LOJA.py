@@ -3,7 +3,7 @@ import datetime as dt
 import time as t
 from sqlalchemy import Integer
 from sqlalchemy.types import String
-from sqlalchemy.types import Date
+from sqlalchemy.types import DateTime
 from pandasql import sqldf
 from CONEXAO import create_connection_postgre
 import DW_TOOLS as dwt
@@ -205,8 +205,8 @@ def load_dim_loja(dim_loja, conn, action):
         "NO_BAIRRO": String,
         "DS_RUA": String(),
         "FL_ATIVO": Integer(),
-        "DT_INICIO": Date(),
-        "DT_FIM": Date()
+        "DT_INICIO": DateTime(),
+        "DT_FIM": DateTime()
     }
 
     (

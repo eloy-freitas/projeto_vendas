@@ -1,9 +1,7 @@
 import pandas as pd
 import time as t
+from sqlalchemy.types import Date, String, Integer
 from CONEXAO import create_connection_postgre
-from sqlalchemy import Integer
-from sqlalchemy.types import String
-from sqlalchemy.types import Date
 import DW_TOOLS as dwt
 
 
@@ -11,7 +9,7 @@ def extract_dim_funcionario(conn):
     dim_funcionario = dwt.read_table(
         conn=conn,
         schema='STAGE',
-        table_name='STAGE_FUNCIONARIO'
+        table_name='STG_FUNCIONARIO'
     )
 
     return dim_funcionario

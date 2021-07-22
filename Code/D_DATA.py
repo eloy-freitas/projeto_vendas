@@ -1,8 +1,6 @@
 import pandas as pd
 import time as t
-from sqlalchemy import Integer
-from sqlalchemy.types import String
-from sqlalchemy.types import DateTime
+from sqlalchemy.types import String, DateTime, Integer
 from CONEXAO import create_connection_postgre
 
 

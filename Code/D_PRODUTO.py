@@ -1,10 +1,7 @@
 import pandas as pd
 import unidecode as uc
 import time as t
-from sqlalchemy import Integer
-from sqlalchemy.types import String
-from sqlalchemy.types import DateTime
-from sqlalchemy.types import Float
+from sqlalchemy.types import String, DateTime, Float, Integer
 from pandasql import sqldf
 from CONEXAO import create_connection_postgre
 import DW_TOOLS as dwt

@@ -1,7 +1,6 @@
 import pandas as pd
 import time as t
-from sqlalchemy import Integer
-from sqlalchemy.types import String
+from sqlalchemy.types import String, Integer
 from CONEXAO import create_connection_postgre
 import DW_TOOLS as dwt
 
@@ -10,13 +9,13 @@ def extract_dim_cliente(conn):
     stg_cliente = dwt.read_table(
         conn=conn,
         schema="STAGE",
-        table_name="STAGE_CLIENTE",
+        table_name="STG_CLIENTE",
     )
 
     stg_endereco = dwt.read_table(
         conn=conn,
         schema='STAGE',
-        table_name='STAGE_ENDERECO'
+        table_name='STG_ENDERECO'
     )
 
     dim_cliente = (
@@ -108,7 +107,6 @@ def load_dim_cliente(dim_cliente, conn):
             dtype=data_type
         )
     )
-
 
 
 def run_dim_cliente(conn):

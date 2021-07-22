@@ -1,8 +1,6 @@
 import time as t
 import pandas as pd
-from sqlalchemy.types import Integer
-from sqlalchemy.types import String
-from sqlalchemy.types import Float
+from sqlalchemy.types import Integer, String, Float
 from pandasql import sqldf
 from CONEXAO import create_connection_postgre
 import DW_TOOLS as dwt
@@ -219,7 +217,7 @@ def extract_fact_venda(conn):
                 AND p.SK_DT_INICIO <= fv.SK_DATA \
                     AND fv.SK_DATA <= p.SK_DT_FIM;')
     )
-    print(fact_venda)
+
     fact_venda = (
         sqldf(f'SELECT\
             fv.*, l.SK_LOJA \

@@ -1,8 +1,7 @@
 import pandas as pd
 import time as t
 from CONEXAO import create_connection_postgre
-from sqlalchemy import Integer
-from sqlalchemy.types import String
+from sqlalchemy.types import String, Integer
 import DW_TOOLS as dwt
 
 

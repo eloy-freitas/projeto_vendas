@@ -6,16 +6,34 @@ import DW_TOOLS as dwt
 
 
 def extract_dim_forma_pagamento(conn):
-    dim_forma_pagamento = dwt.read_table(
+    """
+    Extrai todas as tabelas necessárias para gerar a dimensão forma pagamento
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    stg_forma_pagamento -- pandas.Dataframe;
+    """
+    stg_forma_pagamento = dwt.read_table(
         conn=conn,
         schema="STAGE",
         table_name="STG_FORMA_PAGAMENTO"
     )
 
-    return dim_forma_pagamento
+    return stg_forma_pagamento
 
 
-def treat_dim_forma_pagamento(dim_forma_pagamento):
+def treat_dim_forma_pagamento(stg_forma_pagamento):
+    """
+    Faz o tratamento dos dados extraidos das stages
+
+    parâmetros:
+    stg_forma_pagamento -- pandas.Dataframe;
+
+    return:
+    dim_forma_pagamento -- pandas.Dataframe;
+    """
     columns_names = {
         "id_pagamento": "CD_FORMA_PAGAMENTO",
         "nome": "NO_FORMA_PAGAMENTO",
@@ -29,7 +47,7 @@ def treat_dim_forma_pagamento(dim_forma_pagamento):
     ]
 
     dim_forma_pagamento = (
-        dim_forma_pagamento.
+        stg_forma_pagamento.
             filter(select_columns).
             rename(columns=columns_names).
             assign(DS_FORMA_PAGAMENTO=lambda x: x.DS_FORMA_PAGAMENTO.
@@ -57,6 +75,13 @@ def treat_dim_forma_pagamento(dim_forma_pagamento):
 
 
 def load_dim_forma_pagamento(dim_forma_pagamento, conn):
+    """
+    Faz a carga da dimensão forma pagamento no DW.
+
+    parâmetros:
+    dim_forma_pagamento -- pandas.Dataframe;
+    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    """
     data_types = {
         "SK_FORMA_PAGAMENTO": Integer(),
         "CD_FORMA_PAGAMENTO": Integer(),
@@ -80,6 +105,12 @@ def load_dim_forma_pagamento(dim_forma_pagamento, conn):
 
 
 def run_dim_forma_pagamento(conn):
+    """
+    Executa o pipeline da dimensão forma de pagamento.
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    """
     (
         extract_dim_forma_pagamento(conn).
             pipe(treat_dim_forma_pagamento).
@@ -87,16 +118,3 @@ def run_dim_forma_pagamento(conn):
     )
 
 
-if __name__ == "__main__":
-    conn_dw = create_connection_postgre(
-        server="192.168.3.2",
-        database="projeto_dw_vendas",
-        username="itix",
-        password="itix123",
-        port="5432"
-    )
-
-    start = t.time()
-    run_dim_forma_pagamento(conn_dw)
-    exec_time = t.time() - start
-    print(f"exec_time = {exec_time}")

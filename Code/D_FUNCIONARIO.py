@@ -6,16 +6,34 @@ import DW_TOOLS as dwt
 
 
 def extract_dim_funcionario(conn):
-    dim_funcionario = dwt.read_table(
+    """
+    Extrai todas as tabelas necessárias para gerar a dimensão funcionario
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    stg_funcionario -- pandas.Dataframe;
+    """
+    stg_funcionario = dwt.read_table(
         conn=conn,
         schema='STAGE',
         table_name='STG_FUNCIONARIO'
     )
 
-    return dim_funcionario
+    return stg_funcionario
 
 
-def treat_dim_funcionario(dim_funcionario):
+def treat_dim_funcionario(stg_funcionario):
+    """
+    Faz o tratamento dos dados extraidos das stages
+
+    parâmetros:
+    stg_funcionario -- pandas.Dataframe;
+
+    return:
+    dim_funcionario -- pandas.Dataframe;
+    """
     columns_names = {
         "id_funcionario": "CD_FUNCIONARIO",
         "nome": "NO_FUNCIONARIO",
@@ -33,7 +51,7 @@ def treat_dim_funcionario(dim_funcionario):
     ]
 
     dim_funcionario = (
-        dim_funcionario.
+        stg_funcionario.
             filter(select_columns).
             rename(columns=columns_names).
             assign(
@@ -54,6 +72,13 @@ def treat_dim_funcionario(dim_funcionario):
 
 
 def load_dim_funcionario(dim_funcionario, conn):
+    """
+    Faz a carga da dimensão funcionario no DW.
+
+    parâmetros:
+    dim_funcionario -- pandas.Dataframe;
+    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    """
     data_types = {
         "SK_FUNCIONARIO": Integer(),
         "CD_FUNCIONARIO": Integer(),
@@ -80,6 +105,12 @@ def load_dim_funcionario(dim_funcionario, conn):
 
 
 def run_dim_funcionario(conn):
+    """
+    Executa o pipeline da dimensão funcionario.
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    """
     (
         extract_dim_funcionario(conn).
             pipe(treat_dim_funcionario).
@@ -87,16 +118,4 @@ def run_dim_funcionario(conn):
     )
 
 
-if __name__ == "__main__":
-    conn_dw = create_connection_postgre(
-        server="192.168.3.2",
-        database="projeto_dw_vendas",
-        username="itix",
-        password="itix123",
-        port="5432"
-    )
 
-    start = t.time()
-    run_dim_funcionario(conn_dw)
-    exec_time = t.time() - start
-    print(f"exec_time = {exec_time}")

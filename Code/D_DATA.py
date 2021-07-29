@@ -1,10 +1,15 @@
 import pandas as pd
-import time as t
 from sqlalchemy.types import String, DateTime, Integer
-from CONEXAO import create_connection_postgre
+
 
 
 def treat_dim_data():
+    """
+    Gera os dados da dimensão data com base em um intervalo de datas
+
+    return:
+    dim_data -- pandas.DataFrame;
+    """
     select_columns = [
         "DT_REFERENCIA"
     ]
@@ -46,6 +51,13 @@ def treat_dim_data():
 
 
 def load_dim_data(dim_data, conn):
+    """
+    Faz a carga da dimensão data no DW.
+
+    parâmetros:
+    dim_cliente -- pandas.Dataframe;
+    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    """
     data_types = {
         "SK_DATA": Integer(),
         "DT_REFERENCIA": DateTime(),
@@ -73,22 +85,13 @@ def load_dim_data(dim_data, conn):
 
 
 def run_dim_data(conn):
+    """
+    Executa o pipeline da dimensão data.
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    """
     (
         treat_dim_data().
             pipe(load_dim_data, conn=conn)
     )
-
-
-if __name__ == "__main__":
-    conn_dw = create_connection_postgre(
-        server="192.168.3.2",
-        database="projeto_dw_vendas",
-        username="itix",
-        password="itix123",
-        port="5432"
-    )
-
-    start = t.time()
-    run_dim_data(conn_dw)
-    exec_time = t.time() - start
-    print(f"exec_time = {exec_time}")

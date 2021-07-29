@@ -1,38 +1,20 @@
 import pandas as pd
 import datetime as dt
-import time as t
 from sqlalchemy.types import DateTime, String, Integer
 from pandasql import sqldf
-from CONEXAO import create_connection_postgre
 import DW_TOOLS as dwt
-
-columns_names = {
-    "id_loja": "CD_LOJA",
-    "nome_loja": "NO_LOJA",
-    "razao_social": "DS_RAZAO_SOCIAL",
-    "cnpj": "NU_CNPJ",
-    "telefone": "NU_TELEFONE",
-    "id_endereco": "CD_ENDERECO_LOJA",
-    "estado": "NO_ESTADO",
-    "cidade": "NO_CIDADE",
-    "bairro": "NO_BAIRRO",
-    "rua": "DS_RUA"
-}
-
-select_columns = [
-    "id_loja",
-    "nome_loja",
-    "razao_social",
-    "cnpj",
-    "telefone",
-    "estado",
-    "cidade",
-    "bairro",
-    "rua"
-]
 
 
 def extract_stage_loja(conn):
+    """
+    Extrai todas as tabelas necessárias para gerar a dimensão loja
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    stg_loja_endereco -- pandas.Dataframe;
+    """
     stg_loja = dwt.read_table(
         conn=conn,
         schema='STAGE',
@@ -45,7 +27,7 @@ def extract_stage_loja(conn):
         table_name='STG_ENDERECO'
     )
 
-    stage_loja = (
+    stg_loja_endereco = (
         stg_loja.pipe(
             pd.merge,
             right=stg_endereco,
@@ -56,10 +38,19 @@ def extract_stage_loja(conn):
         )
     )
 
-    return stage_loja
+    return stg_loja_endereco
 
 
 def extract_dim_loja(conn):
+    """
+    Extrai os dados da dimensão loja
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    dim_loja -- pandas.Dataframe;
+    """
     try:
         dim_loja = dwt.read_table(
             conn=conn,
@@ -73,9 +64,42 @@ def extract_dim_loja(conn):
         return None
 
 
-def treat_dim_loja(stage_loja):
+def treat_dim_loja(stg_loja_endereco):
+    """
+    Faz o tratamento dos dados extraidos das stages
+
+    parâmetros:
+    stg_loja_endereco -- pandas.Dataframe;
+
+    return:
+    dim_loja -- pandas.Dataframe;
+    """
+    columns_names = {
+        "id_loja": "CD_LOJA",
+        "nome_loja": "NO_LOJA",
+        "razao_social": "DS_RAZAO_SOCIAL",
+        "cnpj": "NU_CNPJ",
+        "telefone": "NU_TELEFONE",
+        "id_endereco": "CD_ENDERECO_LOJA",
+        "estado": "NO_ESTADO",
+        "cidade": "NO_CIDADE",
+        "bairro": "NO_BAIRRO",
+        "rua": "DS_RUA"
+    }
+
+    select_columns = [
+        "id_loja",
+        "nome_loja",
+        "razao_social",
+        "cnpj",
+        "telefone",
+        "estado",
+        "cidade",
+        "bairro",
+        "rua"
+    ]
     dim_loja = (
-        stage_loja.
+        stg_loja_endereco.
             filter(select_columns).
             rename(columns=columns_names).
             assign(
@@ -99,6 +123,15 @@ def treat_dim_loja(stage_loja):
 
 
 def treat_updated_loja(conn):
+    """
+    Faz o tratamento dos fluxos de execução da SCD loja
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    insert_records ou updated_values -- pandas.Dataframe;
+    """
     select_columns = {
         "CD_LOJA",
         "NO_LOJA",
@@ -109,6 +142,19 @@ def treat_updated_loja(conn):
         "NO_CIDADE",
         "NO_BAIRRO",
         "DS_RUA"
+    }
+
+    columns_names = {
+        "id_loja": "CD_LOJA",
+        "nome_loja": "NO_LOJA",
+        "razao_social": "DS_RAZAO_SOCIAL",
+        "cnpj": "NU_CNPJ",
+        "telefone": "NU_TELEFONE",
+        "id_endereco": "CD_ENDERECO_LOJA",
+        "estado": "NO_ESTADO",
+        "cidade": "NO_CIDADE",
+        "bairro": "NO_BAIRRO",
+        "rua": "DS_RUA"
     }
 
     # extraindo os dados da stage
@@ -191,6 +237,14 @@ def treat_updated_loja(conn):
 
 
 def load_dim_loja(dim_loja, conn, action):
+    """
+    Faz a carga da dimensão loja no DW.
+
+    parâmetros:
+    dim_loja -- pandas.Dataframe;
+    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    action -- if_exists (append, replace...)
+    """
     data_types = {
         "SK_LOJA": Integer(),
         "CD_LOJA": Integer(),
@@ -223,6 +277,12 @@ def load_dim_loja(dim_loja, conn, action):
 
 
 def run_dim_loja(conn):
+    """
+    Executa o pipeline da dimensão loja.
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    """
     dim_loja = extract_dim_loja(conn)
     if dim_loja is None:
         (
@@ -239,71 +299,3 @@ def run_dim_loja(conn):
         )
 
 
-if __name__ == "__main__":
-    conn_dw = create_connection_postgre(
-        server="192.168.3.2",
-        database="projeto_dw_vendas",
-        username="itix",
-        password="itix123",
-        port="5432"
-    )
-
-    start = t.time()
-    run_dim_loja(conn_dw)
-    exec_time = t.time() - start
-    print(f"exec_time = {exec_time}")
-
-
-"""
-def get_new_loja(conn):
-    df_stage = extract_stage_loja(conn)
-
-    df_dw = extract_dim_loja(conn)
-
-    join_df = (
-        pd.merge(
-            left=df_stage,
-            right=df_dw,
-            left_on='id_loja',
-            right_on="CD_LOJA",
-            how='left').
-            assign(
-            FL_INSERT=lambda x: x.CD_LOJA.apply(
-                lambda y: 'I' if pd.isnull(y) else 'N')
-        )
-    )
-
-    max_cd_dw = df_dw['SK_LOJA'].max() + 1
-    size = max_cd_dw + join_df.query(f'FL_INSERT == "I"').shape[0] - max_cd_dw
-    columns = [
-        "SK_LOJA",
-        "id_loja",
-        "nome_loja",
-        "razao_social",
-        "cnpj",
-        "telefone",
-        "id_endereco",
-        "estado",
-        "cidade",
-        "bairro",
-        "rua",
-        "FL_ATIVO",
-        "DT_INICIO",
-        "DT_FIM"]
-
-    insert_record = (
-        join_df.
-            query("FL_INSERT == 'I'")[columns].
-            filter(items=select_columns).
-            rename(columns=columns_names).
-            assign(
-                SK_LOJA=lambda x: range(max_cd_dw,
-                                       (max_cd_dw + size)),
-                FL_ATIVO=lambda x: 1,
-                DT_INICIO=lambda x: pd.to_datetime('today'),
-                DT_FIM=lambda x: None)
-    )
-
-    return insert_record
-
-"""

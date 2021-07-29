@@ -1,9 +1,7 @@
 import pandas as pd
 import unidecode as uc
-import time as t
 from sqlalchemy.types import String, DateTime, Float, Integer
 from pandasql import sqldf
-from CONEXAO import create_connection_postgre
 import DW_TOOLS as dwt
 
 pd.set_option('display.max_columns', None)
@@ -45,6 +43,12 @@ categorias = {'cafe da manhã': {"CAFE", "ACHOCOLATADO", "CEREAIS", "PAO",
 
 
 def classificar_produto(nome):
+    """
+    Classifica o produto baseado nas palavras chaves no nome
+
+    parâmetros:
+    nome -- string que representa o nome do produto;
+    """
     nome = set(str(uc.unidecode(nome)).split())
     data_set = [len(categorias[x].intersection(nome)) for x in categorias]
     result = pd.Series(data=data_set, index=categorias.keys())
@@ -52,6 +56,15 @@ def classificar_produto(nome):
 
 
 def extract_stage_produto(conn):
+    """
+    Extrai todas as tabelas necessárias para gerar a dimensão produto
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    stg_produto -- pandas.Dataframe;
+    """
     stg_produto = dwt.read_table(
         conn=conn,
         schema='STAGE',
@@ -63,6 +76,15 @@ def extract_stage_produto(conn):
 
 
 def extract_dim_produto(conn):
+    """
+    Extrai os dados da dimensão produto
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    dim_produto -- pandas.Dataframe;
+    """
     try:
         dim_produto = dwt.read_table(
             conn=conn,
@@ -77,7 +99,16 @@ def extract_dim_produto(conn):
         return None
 
 
-def treat_dim_produto(dim_produto):
+def treat_dim_produto(stg_produto):
+    """
+    Faz o tratamento dos dados extraidos das stages
+
+    parâmetros:
+    stg_produto -- pandas.Dataframe;
+
+    return:
+    dim_produto -- pandas.Dataframe;
+    """
     select_columns = [
         "id_produto",
         "nome_produto",
@@ -88,7 +119,7 @@ def treat_dim_produto(dim_produto):
         "ativo"
     ]
     dim_produto = (
-        dim_produto.
+        stg_produto.
             filter(select_columns).
             rename(columns=columns_names).
             assign(
@@ -123,6 +154,15 @@ def treat_dim_produto(dim_produto):
 
 
 def get_updated_produto(conn):
+    """
+    Faz o tratamento dos fluxos de execução da SCD produto
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    insert_records ou updated_values -- pandas.Dataframe;
+    """
     select_columns = [
         "CD_PRODUTO",
         "NO_PRODUTO",
@@ -230,6 +270,14 @@ def get_updated_produto(conn):
 
 
 def load_dim_produto(dim_produto, conn, action):
+    """
+    Faz a carga da dimensão produto no DW.
+
+    parâmetros:
+    dim_produto -- pandas.Dataframe;
+    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    action -- if_exists (append, replace...)
+    """
     data_types = {
         "SK_PRODUTO": Integer(),
         "CD_PRODUTO": Integer(),
@@ -260,6 +308,12 @@ def load_dim_produto(dim_produto, conn, action):
 
 
 def run_dim_produto(conn):
+    """
+    Executa o pipeline da dimensão produto.
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    """
     dim_produto = extract_dim_produto(conn)
     if dim_produto is None:
         (
@@ -275,16 +329,4 @@ def run_dim_produto(conn):
         )
 
 
-if __name__ == "__main__":
-    conn_dw = create_connection_postgre(
-        server="192.168.3.2",
-        database="projeto_dw_vendas",
-        username="itix",
-        password="itix123",
-        port="5432"
-    )
 
-    start = t.time()
-    run_dim_produto(conn_dw)
-    exec_time = t.time() - start
-    print(f"exec_time = {exec_time}")

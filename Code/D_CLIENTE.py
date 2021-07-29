@@ -5,11 +5,13 @@ import DW_TOOLS as dwt
 
 def extract_dim_cliente(conn):
     """
-    Função que faz extração dos dados das stages cliente e endereço.
-    Em seguida faz merge das informações com base no id_endereco
-    e retorna o dataframe resultante
-    :param sqlalchemy engine (conn):
-    :return pandas.Dataframe (stg_cliente_endereco):
+    Extrai todas as tabelas necessárias para gerar a dimensão cliente
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    stg_cliente_endereco -- pandas.Dataframe;
     """
     stg_cliente = dwt.read_table(
         conn=conn,
@@ -38,10 +40,13 @@ def extract_dim_cliente(conn):
 
 def treat_dim_cliente(stg_cliente_endereco):
     """
-    Função que recebe o dataframe com os dados extraido das stages
-    faz o tratamento e transforma na dimensão cliente (dim_cliente)
-    :param pandas.Dataframe (stg_cliente_endereco):
-    :return pandas.Dataframe (dim_cliente):
+    Faz o tratamento dos dados extraidos das stages
+
+    parâmetros:
+    stg_cliente_endereco -- pandas.Dataframe;
+
+    return:
+    dim_cliente -- pandas.Dataframe;
     """
 
     columns_name = {
@@ -95,10 +100,11 @@ def treat_dim_cliente(stg_cliente_endereco):
 
 def load_dim_cliente(dim_cliente, conn):
     """
-    Função que recebe um dataframe com os dados da dimensão cliente
-    e faz a carga no Data Warehouse
-    :param pandas.Dataframe (dim_cliente):
-    :param sqlalchemy engine (conn):
+    Faz a carga da dimensão cliente no DW.
+
+    parâmetros:
+    dim_cliente -- pandas.Dataframe;
+    conn -- conexão criada via SqlAlchemy com o servidor do DW;
     """
     data_type = {
         "SK_CLIENTE": Integer(),
@@ -129,9 +135,10 @@ def load_dim_cliente(dim_cliente, conn):
 
 def run_dim_cliente(conn):
     """
-    Função que executa o pipeline da dimensão cliente consistindo em:
-    extração dos dados das stages, tratamento e carregamento no DW
-    :param sqlalchemy engine (conn):
+    Executa o pipeline da dimensão cliente.
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor do DW;
     """
     (
         extract_dim_cliente(conn).

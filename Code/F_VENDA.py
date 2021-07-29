@@ -7,6 +7,15 @@ import DW_TOOLS as dwt
 
 
 def extract_fact_venda(conn):
+    """
+    Extrai todas as tabelas necessárias para gerar a fato venda
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    stg_cliente_endereco -- pandas.Dataframe;
+    """
     stage_venda = (dwt.read_table(
         conn=conn,
         schema='STAGE',
@@ -90,7 +99,7 @@ def extract_fact_venda(conn):
                  "VL_PRECO_CUSTO", "VL_PERCENTUAL_LUCRO",
                  'DT_INICIO', 'DT_FIM']
     )
-    fact_venda = (
+    stg_venda = (
         stage_venda.
             pipe(pd.merge,
                  right=stage_item_venda,
@@ -207,31 +216,40 @@ def extract_fact_venda(conn):
         )
     )
 
-    fact_venda = (
+    stg_venda = (
         sqldf(f'SELECT\
             fv.*, p.SK_PRODUTO, p.VL_PRECO_CUSTO,\
             p.VL_PERCENTUAL_LUCRO\
-            FROM fact_venda fv\
+            FROM stg_venda fv\
             LEFT JOIN produtos p on fv.id_produto = p.CD_PRODUTO\
             WHERE p.CD_PRODUTO = fv.id_produto \
                 AND p.SK_DT_INICIO <= fv.SK_DATA \
                     AND fv.SK_DATA <= p.SK_DT_FIM;')
     )
 
-    fact_venda = (
+    stg_venda = (
         sqldf(f'SELECT\
             fv.*, l.SK_LOJA \
-            FROM fact_venda fv\
+            FROM stg_venda fv\
             LEFT JOIN lojas l on fv.id_loja = l.CD_LOJA\
             WHERE l.CD_LOJA = fv.id_loja \
                 AND l.SK_DT_INICIO <= fv.SK_DATA \
                     AND fv.SK_DATA <= l.SK_DT_FIM;')
     )
 
-    return fact_venda
+    return stg_venda
 
 
-def treat_fact_venda(fact_tbl):
+def treat_fact_venda(stg_venda):
+    """
+    Faz o tratamento dos dados extraidos das stages
+
+    parâmetros:
+    stg_venda -- pandas.Dataframe;
+
+    return:
+    fact_venda -- pandas.Dataframe;
+    """
     columns_names = {
         "nfc": "NU_NFC",
         "qtd_produto": "QTD_PRODUTO",
@@ -252,7 +270,7 @@ def treat_fact_venda(fact_tbl):
     ]
 
     fact_venda = (
-        fact_tbl.
+        stg_venda.
             rename(columns=columns_names).
             filter(columns_select)
     )
@@ -269,6 +287,13 @@ def treat_fact_venda(fact_tbl):
 
 
 def load_fact_venda(fact_venda, conn):
+    """
+    Faz a carga da fato venda no DW.
+
+    parâmetros:
+    fact_venda -- pandas.Dataframe;
+    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    """
     data_type = {
         "SK_FORMA_PAGAMENTO": Integer(),
         "SK_CLIENTE": Integer(),
@@ -297,6 +322,12 @@ def load_fact_venda(fact_venda, conn):
 
 
 def run_fact_venda(conn):
+    """
+    Executa o pipeline da fato venda.
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    """
     (
         extract_fact_venda(conn).
         pipe(treat_fact_venda).
@@ -304,16 +335,3 @@ def run_fact_venda(conn):
     )
 
 
-if __name__ == "__main__":
-    conn_dw = create_connection_postgre(
-        server="192.168.3.2",
-        database="projeto_dw_vendas",
-        username="itix",
-        password="itix123",
-        port="5432"
-    )
-
-    start = t.time()
-    run_fact_venda(conn_dw)
-    exec_time = t.time() - start
-    print(f"exec_time = {exec_time}")

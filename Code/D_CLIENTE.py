@@ -1,11 +1,16 @@
 import pandas as pd
-import time as t
 from sqlalchemy.types import String, Integer
-from CONEXAO import create_connection_postgre
 import DW_TOOLS as dwt
 
 
 def extract_dim_cliente(conn):
+    """
+    Função que faz extração dos dados das stages cliente e endereço.
+    Em seguida faz merge das informações com base no id_endereco
+    e retorna o dataframe resultante
+    :param sqlalchemy engine (conn):
+    :return pandas.Dataframe (stg_cliente_endereco):
+    """
     stg_cliente = dwt.read_table(
         conn=conn,
         schema="STAGE",
@@ -18,7 +23,7 @@ def extract_dim_cliente(conn):
         table_name='STG_ENDERECO'
     )
 
-    dim_cliente = (
+    stg_cliente_endereco = (
         pd.merge(
             left=stg_cliente,
             right=stg_endereco,
@@ -28,10 +33,17 @@ def extract_dim_cliente(conn):
         )
     )
     
-    return dim_cliente
+    return stg_cliente_endereco
 
 
-def treat_dim_cliente(dim_cliente):
+def treat_dim_cliente(stg_cliente_endereco):
+    """
+    Função que recebe o dataframe com os dados extraido das stages
+    faz o tratamento e transforma na dimensão cliente (dim_cliente)
+    :param pandas.Dataframe (stg_cliente_endereco):
+    :return pandas.Dataframe (dim_cliente):
+    """
+
     columns_name = {
         "id_cliente": "CD_CLIENTE",
         "nome": "NO_CLIENTE",
@@ -56,7 +68,7 @@ def treat_dim_cliente(dim_cliente):
     ]
 
     dim_cliente = (
-        dim_cliente.
+        stg_cliente_endereco.
             filter(select_columns).
             rename(columns=columns_name).
             assign(
@@ -82,6 +94,12 @@ def treat_dim_cliente(dim_cliente):
 
 
 def load_dim_cliente(dim_cliente, conn):
+    """
+    Função que recebe um dataframe com os dados da dimensão cliente
+    e faz a carga no Data Warehouse
+    :param pandas.Dataframe (dim_cliente):
+    :param sqlalchemy engine (conn):
+    """
     data_type = {
         "SK_CLIENTE": Integer(),
         "CD_CLIENTE": Integer(),
@@ -110,23 +128,14 @@ def load_dim_cliente(dim_cliente, conn):
 
 
 def run_dim_cliente(conn):
+    """
+    Função que executa o pipeline da dimensão cliente consistindo em:
+    extração dos dados das stages, tratamento e carregamento no DW
+    :param sqlalchemy engine (conn):
+    """
     (
         extract_dim_cliente(conn).
             pipe(treat_dim_cliente).
             pipe(load_dim_cliente, conn=conn)
     )
 
-
-if __name__ == "__main__":
-    conn_dw = create_connection_postgre(
-        server="192.168.3.2",
-        database="projeto_dw_vendas",
-        username="itix",
-        password="itix123",
-        port="5432"
-    )
-
-    start = t.time()
-    run_dim_cliente(conn_dw)
-    exec_time = t.time() - start
-    print(f"exec_time = {exec_time}")

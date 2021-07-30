@@ -1,6 +1,8 @@
+import time as t
 import pandas as pd
 from sqlalchemy.types import String, Integer
 import DW_TOOLS as dwt
+from CONEXAO import create_connection_postgre
 
 
 def extract_dim_cliente(conn):
@@ -17,12 +19,26 @@ def extract_dim_cliente(conn):
         conn=conn,
         schema="STAGE",
         table_name="STG_CLIENTE",
+        columns=[
+            'id_cliente',
+            'nome',
+            'cpf',
+            'tel',
+            'id_endereco'
+        ]
     )
 
     stg_endereco = dwt.read_table(
         conn=conn,
         schema='STAGE',
-        table_name='STG_ENDERECO'
+        table_name='STG_ENDERECO',
+        columns=[
+            'id_endereco',
+            'estado',
+            'cidade',
+            'bairro',
+            'rua'
+        ]
     )
 
     stg_cliente_endereco = (
@@ -31,10 +47,10 @@ def extract_dim_cliente(conn):
             right=stg_endereco,
             left_on='id_endereco',
             right_on='id_endereco',
-            how='inner'
+            how='left'
         )
     )
-    
+
     return stg_cliente_endereco
 
 
@@ -58,7 +74,7 @@ def treat_dim_cliente(stg_cliente_endereco):
         "estado": "NO_ESTADO",
         "cidade": "NO_CIDADE",
         "bairro": "NO_BAIRRO",
-        "rua": "DS_RUA" 
+        "rua": "DS_RUA"
 
     }
     select_columns = [
@@ -66,10 +82,11 @@ def treat_dim_cliente(stg_cliente_endereco):
         "nome",
         "cpf",
         "tel",
+        'id_endereco',
         "estado",
         "cidade",
         "bairro",
-        "rua" 
+        "rua"
     ]
 
     dim_cliente = (
@@ -89,12 +106,12 @@ def treat_dim_cliente(stg_cliente_endereco):
 
     dim_cliente = (
         pd.DataFrame([
-            [-1, -1, "Não informado", -1, -1, "Não informado", "Não informado", "Não informado", "Não informado"],
-            [-2, -2, "Não aplicável", -2, -2, "Não aplicável", "Não aplicável", "Não aplicável", "Não aplicável"],
-            [-3, -3, "Desconhecido", -3, -3, "Desconhecido", "Desconhecido", "Desconhecido", "Desconhecido"]
+            [-1, -1, "Não informado", "Não informado", "Não informado", -1, "Não informado", "Não informado", "Não informado", "Não informado"],
+            [-2, -2, "Não aplicável", "Não aplicável", "Não aplicável", -2, "Não aplicável", "Não aplicável", "Não aplicável", "Não aplicável"],
+            [-3, -3, "Desconhecido", "Desconhecido", "Desconhecido", -3, "Desconhecido", "Desconhecido", "Desconhecido", "Desconhecido"]
         ], columns=dim_cliente.columns).append(dim_cliente)
     )
-    
+
     return dim_cliente
 
 
@@ -112,7 +129,7 @@ def load_dim_cliente(dim_cliente, conn):
         "NO_CLIENTE": String(),
         "NU_CPF": String(),
         "NU_TELEFONE": String(),
-        "CD_ENDERECO_CLIENTE": String(),
+        "CD_ENDERECO_CLIENTE": Integer(),
         "NO_ESTADO": String(),
         "NO_CIDADE": String(),
         "NO_BAIRRO": String(),
@@ -145,4 +162,17 @@ def run_dim_cliente(conn):
             pipe(treat_dim_cliente).
             pipe(load_dim_cliente, conn=conn)
     )
+
+
+if __name__ == '__main__':
+    conn_dw = create_connection_postgre(
+        server="192.168.3.2",
+        database="projeto_dw_vendas",
+        username="itix",
+        password="itix123",
+        port="5432"
+    )
+    start = t.time()
+    run_dim_cliente(conn_dw)
+    print(f'exec time = {t.time() - start}')
 

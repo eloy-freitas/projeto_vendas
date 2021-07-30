@@ -1,5 +1,6 @@
 import time
 import DW_TOOLS as dwt
+from CONEXAO import create_connection_postgre
 
 
 def create_stg_venda(conn_dw):
@@ -120,3 +121,22 @@ def create_stg_endereco(conn_dw):
     )
     exec_time = time.time() - start
     print(f'tempo de execução da stage STG_ENDERECO: {exec_time:.4f}')
+
+
+if __name__ == '__main__':
+    conn_dw = create_connection_postgre(
+        server="192.168.3.2",
+        database="projeto_dw_vendas",
+        username="itix",
+        password="itix123",
+        port="5432"
+    )
+
+    create_stg_venda(conn_dw)
+    create_stg_funcionario(conn_dw)
+    create_stg_forma_pagamento(conn_dw)
+    create_stg_item_venda(conn_dw)
+    create_stg_produto(conn_dw)
+    create_stg_loja(conn_dw)
+    create_stg_cliente(conn_dw)
+    create_stg_endereco(conn_dw)

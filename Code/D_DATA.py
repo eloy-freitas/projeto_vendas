@@ -1,6 +1,7 @@
 import pandas as pd
+import time as t
 from sqlalchemy.types import String, DateTime, Integer
-
+from CONEXAO import create_connection_postgre
 
 
 def treat_dim_data():
@@ -95,3 +96,16 @@ def run_dim_data(conn):
         treat_dim_data().
             pipe(load_dim_data, conn=conn)
     )
+
+
+if __name__ == '__main__':
+    conn_dw = create_connection_postgre(
+        server="192.168.3.2",
+        database="projeto_dw_vendas",
+        username="itix",
+        password="itix123",
+        port="5432"
+    )
+    start = t.time()
+    run_dim_data(conn_dw)
+    print(f'exec time = {t.time() - start}')

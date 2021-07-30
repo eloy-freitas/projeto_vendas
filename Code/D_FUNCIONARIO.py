@@ -118,4 +118,14 @@ def run_dim_funcionario(conn):
     )
 
 
-
+if __name__ == '__main__':
+    conn_dw = create_connection_postgre(
+        server="192.168.3.2",
+        database="projeto_dw_vendas",
+        username="itix",
+        password="itix123",
+        port="5432"
+    )
+    start = t.time()
+    run_dim_funcionario(conn_dw)
+    print(f'exec time = {t.time() - start}')

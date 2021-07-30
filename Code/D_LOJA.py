@@ -1,8 +1,10 @@
 import pandas as pd
 import datetime as dt
+import time as t
 from sqlalchemy.types import DateTime, String, Integer
 from pandasql import sqldf
 import DW_TOOLS as dwt
+from CONEXAO import create_connection_postgre
 
 
 def extract_stage_loja(conn):
@@ -93,6 +95,7 @@ def treat_dim_loja(stg_loja_endereco):
         "razao_social",
         "cnpj",
         "telefone",
+        "id_endereco",
         "estado",
         "cidade",
         "bairro",
@@ -110,12 +113,12 @@ def treat_dim_loja(stg_loja_endereco):
     )
 
     dim_loja.insert(0, 'SK_LOJA', range(1, 1 + len(dim_loja)))
-
+    print(dim_loja.columns)
     dim_loja = (
         pd.DataFrame([
-            [-1, -1, "Não informado", "Não informado", -1, -1, "Não informado", "Não informado", "Não informado", "Não informado", -1, None, None],
-            [-2, -2, "Não aplicável", "Não aplicável", -2, -2, "Não aplicável", "Não aplicável", "Não aplicável", "Não aplicável", -2, None, None],
-            [-3, -3, "Desconhecido", "Desconhecido", -3, -3, "Desconhecido", "Desconhecido", "Desconhecido", "Desconhecido", -3, None, None]
+            [-1, -1, "Não informado", "Não informado", "Não informado", "Não informado", -1,"Não informado", "Não informado", "Não informado", "Não informado", -1, None, None],
+            [-2, -2, "Não aplicável", "Não aplicável", "Não aplicável", "Não aplicável", -2, "Não aplicável", "Não aplicável", "Não aplicável", "Não aplicável", -2, None, None],
+            [-3, -3, "Desconhecido", "Desconhecido", "Desconhecido", "Desconhecido", -3, "Desconhecido", "Desconhecido", "Desconhecido", "Desconhecido", -3, None, None]
         ], columns=dim_loja.columns).append(dim_loja)
     )
 
@@ -132,17 +135,18 @@ def treat_updated_loja(conn):
     return:
     insert_records ou updated_values -- pandas.Dataframe;
     """
-    select_columns = {
+    select_columns = [
         "CD_LOJA",
         "NO_LOJA",
         "DS_RAZAO_SOCIAL",
         "NU_CNPJ",
         "NU_TELEFONE",
+        "CD_ENDERECO_LOJA",
         "NO_ESTADO",
         "NO_CIDADE",
         "NO_BAIRRO",
         "DS_RUA"
-    }
+    ]
 
     columns_names = {
         "id_loja": "CD_LOJA",
@@ -252,6 +256,7 @@ def load_dim_loja(dim_loja, conn, action):
         "DS_RAZAO_SOCIAL": String(),
         "NU_CNPJ": String(),
         "NU_TELEFONE": String(),
+        "CD_ENDERECO_LOJA":Integer(),
         "NO_ESTADO": String(),
         "NO_CIDADE": String(),
         "NO_BAIRRO": String,
@@ -299,3 +304,14 @@ def run_dim_loja(conn):
         )
 
 
+if __name__ == '__main__':
+    conn_dw = create_connection_postgre(
+        server="192.168.3.2",
+        database="projeto_dw_vendas",
+        username="itix",
+        password="itix123",
+        port="5432"
+    )
+    start = t.time()
+    run_dim_loja(conn_dw)
+    print(f'exec time = {t.time() - start}')

@@ -39,7 +39,12 @@ def extract_fact_venda(conn):
     stage_item_venda = dwt.read_table(
         conn=conn,
         schema='STAGE',
-        table_name='STG_ITEM_VENDA'
+        table_name='STG_ITEM_VENDA',
+        columns=[
+            'id_venda',
+            'id_produto',
+            'qtd_produto'
+        ]
     ).assign(
         id_venda=lambda x: x.id_venda.astype('int64')
     )

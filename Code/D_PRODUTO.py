@@ -71,6 +71,15 @@ def extract_stage_produto(conn):
         conn=conn,
         schema='STAGE',
         table_name='STG_PRODUTO',
+        columns=[
+            'id_produto',
+            'nome_produto',
+            'cod_barra',
+            'preco_custo',
+            'percentual_lucro',
+            'data_cadastro',
+            'ativo'
+        ],
         where=f'"id_produto" > 0 order by "id_produto";'
     )
 
@@ -92,6 +101,19 @@ def extract_dim_produto(conn):
             conn=conn,
             schema='DW',
             table_name='D_PRODUTO',
+            columns=[
+                'SK_PRODUTO',
+                'CD_PRODUTO',
+                'NO_PRODUTO',
+                'CD_BARRA',
+                'VL_PRECO_CUSTO',
+                'VL_PERCENTUAL_LUCRO',
+                'DT_CADASTRO',
+                'FL_ATIVO',
+                'DT_INICIO',
+                'DT_FIM',
+                'DS_CATEGORIA'
+            ],
             where=f'"CD_PRODUTO" > 0 \
             and "FL_ATIVO" = 1\
             order by "CD_PRODUTO";'

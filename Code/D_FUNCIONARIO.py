@@ -18,7 +18,14 @@ def extract_dim_funcionario(conn):
     stg_funcionario = dwt.read_table(
         conn=conn,
         schema='STAGE',
-        table_name='STG_FUNCIONARIO'
+        table_name='STG_FUNCIONARIO',
+        columns=[
+            'id_funcionario',
+            'nome',
+            'cpf',
+            'tel',
+            'data_nascimento'
+        ]
     )
 
     return stg_funcionario

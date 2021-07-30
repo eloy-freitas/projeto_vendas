@@ -18,7 +18,12 @@ def extract_dim_forma_pagamento(conn):
     stg_forma_pagamento = dwt.read_table(
         conn=conn,
         schema="STAGE",
-        table_name="STG_FORMA_PAGAMENTO"
+        table_name="STG_FORMA_PAGAMENTO",
+        columns=[
+            "id_pagamento",
+            "nome",
+            "descricao"
+        ]
     )
 
     return stg_forma_pagamento

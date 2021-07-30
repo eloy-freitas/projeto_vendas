@@ -20,13 +20,28 @@ def extract_stage_loja(conn):
     stg_loja = dwt.read_table(
         conn=conn,
         schema='STAGE',
-        table_name='STG_LOJA'
+        table_name='STG_LOJA',
+        columns=[
+            'id_loja',
+            'nome_loja',
+            'razao_social',
+            'cnpj',
+            'telefone',
+            'id_endereco'
+        ]
     )
 
     stg_endereco = dwt.read_table(
         conn=conn,
         schema='STAGE',
-        table_name='STG_ENDERECO'
+        table_name='STG_ENDERECO',
+        columns=[
+            'id_endereco',
+            'estado',
+            'cidade',
+            'bairro',
+            'rua'
+        ]
     )
 
     stg_loja_endereco = (
@@ -58,6 +73,23 @@ def extract_dim_loja(conn):
             conn=conn,
             schema='DW',
             table_name='D_LOJA',
+            columns=[
+                'SK_LOJA',
+                'CD_LOJA',
+                'NO_LOJA',
+                'DS_RAZAO_SOCIAL',
+                'NU_CNPJ',
+                'NU_TELEFONE',
+                'CD_ENDERECO_LOJA',
+                'NO_ESTADO',
+                'NO_CIDADE',
+                'NO_BAIRRO',
+                'DS_RUA',
+                'FL_ATIVO',
+                'DT_INICIO',
+                'DT_FIM'
+
+            ],
             where='"SK_LOJA" > 0'
         )
 

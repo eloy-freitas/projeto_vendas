@@ -51,7 +51,7 @@ def extract_stage_loja(conn):
             left_on="id_endereco",
             right_on="id_endereco",
             suffixes=["_01", "_02"],
-            how='inner'
+            how='left'
         )
     )
 
@@ -157,7 +157,59 @@ def treat_dim_loja(stg_loja_endereco):
     return dim_loja
 
 
-def treat_updated_loja(conn):
+def extract_new_records(conn):
+    # extraindo os dados da stage
+    df_stage = extract_stage_loja(conn)
+
+    # extraindo os dados do dw
+    df_dw = extract_dim_loja(conn)
+
+    # fazendo a diferença da stage com o dw, para saber os dados que atualizaram
+    new_records = (
+        sqldf("SELECT df_stage.*\
+                    FROM df_stage\
+                    LEFT JOIN df_dw \
+                    ON df_stage.id_loja = df_dw.CD_LOJA\
+                    WHERE df_dw.CD_LOJA IS NULL").
+        assign(
+            fl_tipo_update=1
+        )
+    )
+
+    new_updates = (
+        sqldf(f"SELECT stg.* \
+                    FROM df_stage stg \
+                    INNER JOIN df_dw dw \
+                    ON stg.id_loja = dw.CD_LOJA \
+                    WHERE \
+                    stg.estado != dw.NO_ESTADO\
+                    OR stg.cidade != dw.NO_CIDADE\
+                    OR stg.bairro != dw.NO_BAIRRO \
+                    OR stg.rua != dw.DS_RUA").
+        assign(
+            fl_tipo_update=2
+        )
+    )
+
+    new_names = (
+        sqldf(f"SELECT stg.* \
+                        FROM df_stage stg \
+                        INNER JOIN df_dw dw \
+                        ON stg.id_loja = dw.CD_LOJA \
+                        WHERE stg.nome_loja != dw.NO_LOJA").
+        assign(
+            fl_tipo_update=3
+        )
+    )
+    new_values = (
+        pd.concat([new_records, new_updates, new_names]).assign(
+            df_size=df_dw['SK_LOJA'].max() + 1
+        )
+    )
+    return new_values
+
+
+def treat_updated_loja(new_values, conn):
     """
     Faz o tratamento dos fluxos de execução da SCD loja
 
@@ -192,84 +244,40 @@ def treat_updated_loja(conn):
         "bairro": "NO_BAIRRO",
         "rua": "DS_RUA"
     }
+    size = new_values['df_size'].max()
 
-    # extraindo os dados da stage
-    stg_source = extract_stage_loja(conn).rename(columns=columns_names)
+    new_names = new_values.query('fl_tipo_update == 3')
+    if len(new_names) > 0:
+        for cd in new_names['id_loja']:
+            nome = new_values.query(f"id_loja == {cd}")["id_loja"].item()
+            sql = f'UPDATE "DW"."D_LOJA"\
+                           SET "NO_LOJA" = \'{str(nome)}\'\
+                           WHERE "CD_LOJA" = {cd} AND "FL_ATIVO" = 1;'
+            conn.execute(sql)
 
-    # extraindo os dados do dw
-    dw_source = extract_dim_loja(conn).rename(columns=columns_names)
 
-    df_dw = dw_source.filter(items=select_columns)
-    df_stage = stg_source.filter(items=select_columns)
-    # fazendo a diferença da stage com o dw, para saber os dados que atualizaram
-
-    new_records = (
-        sqldf("SELECT df_stage.*\
-                    FROM df_stage\
-                    LEFT JOIN df_dw \
-                    ON (df_stage.CD_LOJA = df_dw.CD_LOJA)\
-                    WHERE df_dw.CD_LOJA IS NULL")
-    )
-
-    new_updates = (
-        sqldf(f"select stg.* \
-                    from df_stage stg \
-                    inner join df_dw dw \
-                    on stg.CD_LOJA = dw.CD_LOJA \
-                    where stg.NO_ESTADO != dw.NO_ESTADO\
-                    or stg.NO_CIDADE != dw.NO_CIDADE\
-                    or stg.NO_BAIRRO != dw.NO_BAIRRO \
-                    or stg.DS_RUA != dw.DS_RUA")
-    )
-
-    names_updateds = (
-        sqldf(f"select stg.* \
-                        from df_stage stg \
-                        inner join df_dw dw \
-                        on stg.CD_LOJA = dw.CD_LOJA \
-                        where stg.NO_LOJA != dw.NO_LOJA")
-    )
-
-    size = dw_source['SK_LOJA'].max() + 1
-    if len(new_updates) > 0 or len(names_updateds) > 0:
-        # extraindo as linhas que foram alteradas e padronizando os dados
-        updated_values = (
-            new_updates.
-                assign(
+    # extraindo as linhas que foram alteradas e padronizando os dados
+    trated_values = (
+        new_values.
+            query('fl_tipo_update != 3').
+            rename(columns=columns_names).
+            filter(items=select_columns).
+            assign(
                 DT_INICIO=lambda x: pd.to_datetime("today"),
                 DT_FIM=lambda x: pd.to_datetime('2023-01-01'),
-                FL_ATIVO=lambda x: 1
-            )
-        )
-        updated_values.insert(0, 'SK_LOJA', range(size, size + len(new_updates)))
+                FL_ATIVO=lambda x: 1)
+    )
+    trated_values.insert(0, 'SK_LOJA', range(size, size + len(new_values)))
 
-        # atualizando a flag e data_fim dos dados atualizados
-        for sk in updated_values['CD_LOJA']:
-            sql = f'update "DW"."D_LOJA"\
-                set "FL_ATIVO" = {0},\
-                "DT_FIM" = \'{pd.to_datetime("today")}\'\
-                where "CD_LOJA" = {sk} and "FL_ATIVO" = 1;'
-            conn.execute(sql)
+    # atualizando a flag e data_fim dos dados atualizados
+    for cd in trated_values['CD_LOJA']:
+        sql = f'UPDATE "DW"."D_LOJA"\
+            SET "FL_ATIVO" = {0},\
+            "DT_FIM" = \'{pd.to_datetime("today")}\'\
+            WHERE "CD_LOJA" = {cd} AND "FL_ATIVO" = 1;'
+        conn.execute(sql)
 
-        for cd in names_updateds['CD_LOJA']:
-            nome = names_updateds.query(f"CD_LOJA == {cd}")["NO_LOJA"].item()
-            sql = f'update "DW"."D_LOJA"\
-                       set "NO_LOJA" = \'{str(nome)}\'\
-                        where "CD_LOJA" = {cd} and "FL_ATIVO" = 1;'
-            conn.execute(sql)
-
-        return updated_values
-    if len(new_records) > 0:
-        insert_records = (
-            new_records.assign(
-            DT_INICIO=lambda x: pd.to_datetime('today'),
-            DT_FIM=lambda x: pd.to_datetime('2023-01-01'),
-            FL_ATIVO=lambda x: 1
-            )
-        )
-
-        insert_records.insert(0, 'SK_LOJA', range(size, size + len(new_records)))
-        return insert_records
+    return trated_values
 
 
 def load_dim_loja(dim_loja, conn, action):
@@ -297,7 +305,6 @@ def load_dim_loja(dim_loja, conn, action):
         "DT_INICIO": DateTime(),
         "DT_FIM": DateTime()
     }
-
     (
         dim_loja.
             astype('string').
@@ -330,7 +337,8 @@ def run_dim_loja(conn):
         )
     else:
         (
-            treat_updated_loja(conn).
+            extract_new_records(conn).
+                pipe(treat_updated_loja, conn=conn).
                 pipe(load_dim_loja, conn=conn, action='append')
 
         )

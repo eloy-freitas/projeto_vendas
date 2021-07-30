@@ -177,26 +177,17 @@ def treat_dim_produto(stg_produto):
     return dim_produto
 
 
-def get_updated_produto(conn):
+def extract_new_produto(conn):
     """
-    Faz o tratamento dos fluxos de execução da SCD produto
+    Extrai novos registros e registros atualizados na stage
 
     parâmetros:
     conn -- conexão criada via SqlAlchemy com o servidor DW;
 
     return:
-    insert_records ou updated_values -- pandas.Dataframe;
+    new_values: dataframe com as atualizações
     """
-    select_columns = [
-        "CD_PRODUTO",
-        "NO_PRODUTO",
-        "CD_BARRA",
-        "DT_CADASTRO",
-        "VL_PRECO_CUSTO",
-        "VL_PERCENTUAL_LUCRO"
-    ]
-
-    stg_source = (
+    df_stage = (
         extract_stage_produto(conn).
             rename(columns=columns_names).
             assign(
@@ -211,86 +202,108 @@ def get_updated_produto(conn):
             assign(DT_CADASTRO=lambda x: x.DT_CADASTRO.astype("datetime64"))
     )
 
-    dw_source = extract_dim_produto(conn)
-
-    df_dw = dw_source.filter(items=select_columns)
-    df_stage = stg_source.filter(items=select_columns)
+    df_dw = extract_dim_produto(conn)
 
     new_records = (
-         sqldf("SELECT df_stage.*\
-                FROM df_stage\
-                LEFT JOIN df_dw \
-                ON (df_stage.CD_PRODUTO = df_dw.CD_PRODUTO)\
-                WHERE df_dw.CD_PRODUTO IS NULL")
+        sqldf("SELECT df_stage.*\
+                    FROM df_stage\
+                    LEFT JOIN df_dw \
+                    ON (df_stage.CD_PRODUTO = df_dw.CD_PRODUTO)\
+                    WHERE df_dw.CD_PRODUTO IS NULL").
+        assign(
+            fl_tipo_update=1
         )
-
-    new_updates = (
-        sqldf(f"select stg.* \
-                from df_stage stg \
-                inner join df_dw dw \
-                on stg.CD_PRODUTO = dw.CD_PRODUTO \
-                where stg.VL_PRECO_CUSTO != dw.VL_PRECO_CUSTO\
-                or stg.VL_PERCENTUAL_LUCRO != dw.VL_PERCENTUAL_LUCRO")
     )
 
-    names_updateds = (
+    new_updates = (
         sqldf(f"select stg.* \
                     from df_stage stg \
                     inner join df_dw dw \
                     on stg.CD_PRODUTO = dw.CD_PRODUTO \
-                    where stg.NO_PRODUTO != dw.NO_PRODUTO")
+                    where stg.VL_PRECO_CUSTO != dw.VL_PRECO_CUSTO\
+                    or stg.VL_PERCENTUAL_LUCRO != dw.VL_PERCENTUAL_LUCRO").
+            assign(
+            fl_tipo_update=2
+        )
     )
 
-    size = dw_source['SK_PRODUTO'].max() + 1
-    if len(new_updates) > 0 or len(names_updateds) > 0:
-
-
-        # extraindo linhas que serão atualizadas
-        updated_values = (
-            new_updates.assign(
-                DT_INICIO=lambda x: pd.to_datetime("today"),
-                DT_FIM=lambda x: pd.to_datetime('2023-01-01'),
-                FL_ATIVO=lambda x: 1,
-                DT_CADASTRO=lambda x: x.DT_CADASTRO.astype("datetime64"),
-                DS_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
-                    lambda y: classificar_produto(y))
-            )
+    new_names = (
+        sqldf(f"select stg.* \
+                        from df_stage stg \
+                        inner join df_dw dw \
+                        on stg.CD_PRODUTO = dw.CD_PRODUTO \
+                        where stg.NO_PRODUTO != dw.NO_PRODUTO").
+        assign(
+            fl_tipo_update=3
         )
+    )
 
-        new_updates.insert(0, 'SK_PRODUTO', range(size, size + len(new_updates)))
+    new_values = (
+        pd.concat([new_records, new_updates, new_names]).assign(
+            df_size=df_dw['SK_PRODUTO'].max() + 1
+        )
+    )
 
-        # identificando as sks que precisam ser atualizadas
-        for cd in updated_values['CD_PRODUTO']:
-            sql = f'update "DW"."D_PRODUTO"\
-                    set "FL_ATIVO" = {0},\
-                    "DT_FIM" = \'{pd.to_datetime("today")}\'\
-                    where "CD_PRODUTO" = {cd} and "FL_ATIVO" = 1;'
-            conn.execute(sql)
+    return new_values
 
-        for cd in names_updateds['CD_PRODUTO']:
-            nome = names_updateds.query(f"CD_PRODUTO == {cd}")["NO_PRODUTO"].item()
+
+def treat_new_produto(new_values, conn):
+    """
+    Faz o tratamento dos fluxos de execução da SCD produto
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+    new_values -- novos registros ou registros atualizados no formato pandas.Dataframe;
+
+    return:
+    trated_values -- registros atualizados no formato pandas.Dataframe;
+    """
+    select_columns = [
+        "CD_PRODUTO",
+        "NO_PRODUTO",
+        "CD_BARRA",
+        "DT_CADASTRO",
+        "VL_PRECO_CUSTO",
+        "VL_PERCENTUAL_LUCRO"
+    ]
+
+    size = new_values['df_size'].max()
+    new_names = new_values.query('fl_tipo_update == 3')
+
+    if len(new_values) > 0:
+        for cd in new_names['CD_PRODUTO']:
+            nome = new_names.query(f"CD_PRODUTO == {cd}")["NO_PRODUTO"].item()
             sql = f'update "DW"."D_PRODUTO"\
                 set "NO_PRODUTO" = \'{str(nome)}\'\
                  where "CD_PRODUTO" = {cd} and "FL_ATIVO" = 1;'
             conn.execute(sql)
 
-        return updated_values
-
-    if len(new_records) > 0:
-        insert_records = (
-            new_records.assign(
-            DT_INICIO=lambda x: pd.to_datetime('today'),
+    # extraindo linhas que serão atualizadas
+    trated_values = (
+        new_values.
+        query('fl_tipo_update != 3').
+        filter(select_columns).
+        assign(
+            DT_INICIO=lambda x: pd.to_datetime("today"),
             DT_FIM=lambda x: pd.to_datetime('2023-01-01'),
-            DS_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
-                lambda y: classificar_produto(y)),
+            FL_ATIVO=lambda x: 1,
             DT_CADASTRO=lambda x: x.DT_CADASTRO.astype("datetime64"),
-            NO_PRODUTO=lambda x: x.NO_PRODUTO.astype(str),
-            FL_ATIVO=lambda x: 1
-            )
+            DS_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
+                lambda y: classificar_produto(y))
         )
+    )
 
-        insert_records.insert(0, 'SK_PRODUTO', range(size, size + len(new_records)))
-        return insert_records
+    trated_values.insert(0, 'SK_PRODUTO', range(size, size + len(new_values)))
+
+    # identificando as sks que precisam ser atualizadas
+    for cd in trated_values['CD_PRODUTO']:
+        sql = f'update "DW"."D_PRODUTO"\
+                set "FL_ATIVO" = {0},\
+                "DT_FIM" = \'{pd.to_datetime("today")}\'\
+                where "CD_PRODUTO" = {cd} and "FL_ATIVO" = 1;'
+        conn.execute(sql)
+
+    return trated_values
 
 
 def load_dim_produto(dim_produto, conn, action):
@@ -348,7 +361,8 @@ def run_dim_produto(conn):
         )
     else:
         (
-            get_updated_produto(conn).
+            extract_new_produto(conn).
+                pipe(treat_new_produto, conn=conn).
                 pipe(load_dim_produto, conn=conn, action='append')
         )
 

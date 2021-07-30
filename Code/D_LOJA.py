@@ -158,6 +158,15 @@ def treat_dim_loja(stg_loja_endereco):
 
 
 def extract_new_records(conn):
+    """
+    Extrai novos registros e registros atualizados na stage
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    new_values: dataframe com as atualizações
+    """
     # extraindo os dados da stage
     df_stage = extract_stage_loja(conn)
 

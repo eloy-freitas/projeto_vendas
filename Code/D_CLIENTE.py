@@ -1,11 +1,12 @@
 import time as t
 import pandas as pd
+from pandasql import sqldf
 from sqlalchemy.types import String, Integer
 import DW_TOOLS as dwt
 from CONEXAO import create_connection_postgre
 
 
-def extract_dim_cliente(conn):
+def extract_stg_cliente(conn):
     """
     Extrai todas as tabelas necessárias para gerar a dimensão cliente
 
@@ -54,6 +55,129 @@ def extract_dim_cliente(conn):
     return stg_cliente_endereco
 
 
+def extract_dim_cliente(conn):
+    """
+    Extrai os registros da dim_cliente do DW
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    dim_cliente -- dataframe com as atualizações
+    """
+    try:
+        dim_cliente = dwt.read_table(
+            conn=conn,
+            schema="DW",
+            table_name="D_CLIENTE",
+            columns=[
+                'SK_CLIENTE',
+                'CD_CLIENTE',
+                'NO_CLIENTE',
+                'NU_CPF',
+                'NU_TELEFONE',
+                'CD_ENDERECO_CLIENTE',
+                'NO_ESTADO',
+                'NO_BAIRRO',
+                'DS_RUA'
+            ]
+        )
+        return dim_cliente
+    except:
+        return None
+
+
+def extract_new_cliente(conn):
+    """
+    Extrai novos registros na stage
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    new_values -- dataframe com as atualizações
+    """
+    dim_cliente = extract_dim_cliente(conn)
+
+    stg_cliente = (
+        extract_stg_cliente(conn).assign(
+            tel=lambda x: x.tel.apply(
+                lambda y: y[0:8] + y[-5:]
+            )
+        )
+    )
+
+    new_clientes = (
+        sqldf('\
+            SELECT * FROM \
+            stg_cliente stg \
+            LEFT JOIN dim_cliente dim \
+            ON stg.id_cliente = dim.CD_CLIENTE \
+            WHERE dim.CD_CLIENTE IS NULL')
+    )
+
+    new_values = (
+        new_clientes.assign(
+            df_size=dim_cliente['SK_CLIENTE'].max() + 1
+        )
+    )
+
+    return new_values
+
+
+def treat_new_clientes(new_values):
+    """
+    Faz o tratamento dos novos registros encontrados na stage
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+    new_values -- novos registros ou registros atualizados no formato pandas.Dataframe;
+
+    return:
+    trated_values -- registros atualizados no formato pandas.Dataframe;
+    """
+    columns_name = {
+        "id_cliente": "CD_CLIENTE",
+        "nome": "NO_CLIENTE",
+        "cpf": "NU_CPF",
+        "tel": "NU_TELEFONE",
+        "id_endereco": "CD_ENDERECO_CLIENTE",
+        "estado": "NO_ESTADO",
+        "cidade": "NO_CIDADE",
+        "bairro": "NO_BAIRRO",
+        "rua": "DS_RUA"
+
+    }
+
+    select_columns = [
+        "id_cliente",
+        "nome",
+        "cpf",
+        "tel",
+        "id_endereco",
+        "estado",
+        "cidade",
+        "bairro",
+        "rua"
+    ]
+
+    dim_cliente = (
+        new_values.
+            filter(select_columns).
+            rename(columns=columns_name).
+            assign(
+            NU_TELEFONE=lambda x: x.NU_TELEFONE.apply(
+                lambda y: y[0:8] + y[-5:]
+            )
+        )
+    )
+
+    size = new_values['df_size'].max()
+    dim_cliente.insert(0, 'SK_CLIENTE', range(size, size + len(dim_cliente)))
+
+    return dim_cliente
+
+
 def treat_dim_cliente(stg_cliente_endereco):
     """
     Faz o tratamento dos dados extraidos das stages
@@ -95,10 +219,7 @@ def treat_dim_cliente(stg_cliente_endereco):
             rename(columns=columns_name).
             assign(
             NU_TELEFONE=lambda x: x.NU_TELEFONE.apply(
-                lambda y: y[0:8] + y[-5:]
-            )).
-            assign(
-            CD_CLIENTE=lambda x: x.CD_CLIENTE.astype('int64')
+                lambda y: y[0:8] + y[-5:])
         )
     )
 
@@ -115,7 +236,7 @@ def treat_dim_cliente(stg_cliente_endereco):
     return dim_cliente
 
 
-def load_dim_cliente(dim_cliente, conn):
+def load_dim_cliente(dim_cliente, conn, action):
     """
     Faz a carga da dimensão cliente no DW.
 
@@ -142,7 +263,7 @@ def load_dim_cliente(dim_cliente, conn):
             con=conn,
             name='D_CLIENTE',
             schema='DW',
-            if_exists='replace',
+            if_exists=action,
             index=False,
             chunksize=100,
             dtype=data_type
@@ -157,11 +278,19 @@ def run_dim_cliente(conn):
     parâmetros:
     conn -- conexão criada via SqlAlchemy com o servidor do DW;
     """
-    (
-        extract_dim_cliente(conn).
-            pipe(treat_dim_cliente).
-            pipe(load_dim_cliente, conn=conn)
-    )
+    dim_cliente = extract_dim_cliente(conn)
+    if dim_cliente is None:
+        (
+            extract_stg_cliente(conn).
+                pipe(treat_dim_cliente).
+                pipe(load_dim_cliente, conn=conn, action='replace')
+        )
+    else:
+        (
+            extract_new_cliente(conn).
+                pipe(treat_new_clientes).
+                pipe(load_dim_cliente, conn=conn, action='append')
+        )
 
 
 if __name__ == '__main__':

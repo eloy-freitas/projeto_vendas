@@ -63,7 +63,7 @@ def extract_dim_cliente(conn):
     conn -- conexão criada via SqlAlchemy com o servidor DW;
 
     return:
-    dim_cliente -- dataframe com as atualizações
+    dim_cliente -- dataframe da dim_cliente
     """
     try:
         dim_cliente = dwt.read_table(

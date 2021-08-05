@@ -92,7 +92,7 @@ def extract_dim_produto(conn):
             table_name='D_PRODUTO',
             columns=["SK_PRODUTO", "CD_PRODUTO",
                      "VL_PRECO_CUSTO", "VL_PERCENTUAL_LUCRO",
-                     'DT_INICIO', 'DT_FIM']).
+                     "DT_INICIO", "DT_FIM", "FL_ATIVO"]).
             assign(
             DT_INICIO=lambda x:
             pd.to_datetime(
@@ -115,7 +115,7 @@ def extract_dim_loja(conn):
             conn=conn,
             schema='DW',
             table_name='D_LOJA',
-            columns=["SK_LOJA", "CD_LOJA", "DT_INICIO", "DT_FIM"]).
+            columns=["SK_LOJA", "CD_LOJA", "DT_INICIO", "DT_FIM", "FL_ATIVO"]).
             assign(
             DT_INICIO=lambda x:
             pd.to_datetime(
@@ -244,43 +244,45 @@ def extract_new_venda(conn):
                      surrogate_key="SK_FUNCIONARIO")
         )
 
-    print(fact_merged_dimensions)
-
-
     merge_with_produto = (
         sqldf('\
         SELECT\
         fmd.SK_FORMA_PAGAMENTO,\
-        fmd.id_produto,\
         fmd.SK_CLIENTE,\
         fmd.SK_FUNCIONARIO,\
         fmd.SK_DATA,\
         fmd.data_venda,\
         fmd.qtd_produto,\
-        fmd.nfc, p.DT_INICIO, p.DT_FIM,\
+        fmd.nfc,\
+        fmd.id_loja,\
         p.SK_PRODUTO,\
         p.VL_PRECO_CUSTO,\
         p.VL_PERCENTUAL_LUCRO\
         FROM fact_merged_dimensions fmd\
         LEFT JOIN dim_produto p\
         ON fmd.id_produto = p.CD_PRODUTO\
-        WHERE p.CD_PRODUTO = fmd.id_produto\
-        AND p.DT_INICIO <= fmd.data_venda <= p.DT_FIM;')
+        WHERE p.CD_PRODUTO = fmd.id_produto AND p.FL_ATIVO = 1;')
     )
 
-    print(merge_with_produto)
-    
-    """
-    stg_venda = (
+    merge_with_loja = (
         sqldf(f'SELECT\
-                fv.*, l.SK_LOJA \
-                FROM stg_venda fv\
-                LEFT JOIN lojas l on fv.id_loja = l.CD_LOJA\
-                WHERE l.CD_LOJA = fv.id_loja \
-                    AND l.SK_DT_INICIO <= fv.SK_DATA \
-                        AND fv.SK_DATA <= l.SK_DT_FIM;')
+                mwp.SK_FORMA_PAGAMENTO,\
+                mwp.SK_CLIENTE,\
+                mwp.SK_FUNCIONARIO,\
+                mwp.SK_DATA,\
+                mwp.data_venda,\
+                mwp.qtd_produto,\
+                mwp.nfc,\
+                mwp.SK_PRODUTO,\
+                mwp.VL_PRECO_CUSTO,\
+                mwp.VL_PERCENTUAL_LUCRO,\
+                l.SK_LOJA\
+                FROM merge_with_produto mwp\
+                LEFT JOIN dim_loja l ON mwp.id_loja = l.CD_LOJA\
+                WHERE l.CD_LOJA = mwp.id_loja AND l.FL_ATIVO = 1;')
     )
-    """
+
+    return merge_with_loja
 
 
 def extract_stg_venda(conn):

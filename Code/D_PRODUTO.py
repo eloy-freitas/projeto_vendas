@@ -154,7 +154,7 @@ def treat_dim_produto(stg_produto):
             DT_CADASTRO=lambda x: x.DT_CADASTRO.apply(
                 lambda y: y[:10]),
             DT_INICIO=lambda x: pd.to_datetime(x.DT_CADASTRO),
-            DT_FIM=lambda x: pd.to_datetime('2023-01-01')).
+            DT_FIM=None).
             assign(
             DS_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
                 lambda y: classificar_produto(y))).
@@ -285,7 +285,7 @@ def treat_new_produto(new_values, conn):
         filter(select_columns).
         assign(
             DT_INICIO=lambda x: pd.to_datetime("today"),
-            DT_FIM=lambda x: pd.to_datetime('2023-01-01'),
+            DT_FIM=None,
             FL_ATIVO=lambda x: 1,
             DT_CADASTRO=lambda x: x.DT_CADASTRO.astype("datetime64"),
             DS_CATEGORIA=lambda x: x.NO_PRODUTO.apply(

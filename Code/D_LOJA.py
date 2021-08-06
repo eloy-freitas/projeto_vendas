@@ -141,11 +141,11 @@ def treat_dim_loja(stg_loja_endereco):
                 CD_LOJA=lambda x: x.CD_LOJA.astype("int64"),
                 FL_ATIVO=lambda x: 1,
                 DT_INICIO=lambda x: dt.date(1900, 1, 1),
-                DT_FIM=lambda x: pd.to_datetime('2023-01-01'))
+                DT_FIM=None)
     )
 
     dim_loja.insert(0, 'SK_LOJA', range(1, 1 + len(dim_loja)))
-    print(dim_loja.columns)
+
     dim_loja = (
         pd.DataFrame([
             [-1, -1, "Não informado", "Não informado", "Não informado", "Não informado", -1,"Não informado", "Não informado", "Não informado", "Não informado", -1, None, None],
@@ -273,7 +273,7 @@ def treat_updated_loja(new_values, conn):
             filter(items=select_columns).
             assign(
                 DT_INICIO=lambda x: pd.to_datetime("today"),
-                DT_FIM=lambda x: pd.to_datetime('2023-01-01'),
+                DT_FIM=None,
                 FL_ATIVO=lambda x: 1)
     )
     trated_values.insert(0, 'SK_LOJA', range(size, size + len(new_values)))

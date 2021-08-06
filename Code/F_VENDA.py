@@ -9,6 +9,15 @@ pd.set_option('display.max_columns', None)
 
 
 def verify_fact_exists(conn):
+    """
+    Verifica se a fato existe
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    fact_venda -- dataframe da fato ou None;
+    """
     try:
         fact_venda = dwt.read_table(
             conn=conn,
@@ -34,6 +43,15 @@ def verify_fact_exists(conn):
 
 
 def extract_fact_venda(conn):
+    """
+    Extrai a fato vendas
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    fact_venda -- dataframe da fato;
+    """
     fact_venda = dwt.read_table(
         conn=conn,
         schema='DW',
@@ -56,6 +74,15 @@ def extract_fact_venda(conn):
 
 
 def extract_dim_forma_pagamento(conn):
+    """
+    Extrai a dimensão forma pagamento
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    dim_forma_pagamento -- dataframe da dim_forma_pagamento;
+    """
     dim_forma_pagamento = dwt.read_table(
         conn=conn,
         schema='DW',
@@ -67,6 +94,15 @@ def extract_dim_forma_pagamento(conn):
 
 
 def extract_dim_cliente(conn):
+    """
+    Extrai a dimensão cliente
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    dim_cliente -- dataframe da dim_cliente;
+    """
     dim_cliente = dwt.read_table(
         conn=conn,
         schema='DW',
@@ -78,6 +114,15 @@ def extract_dim_cliente(conn):
 
 
 def extract_dim_funcionario(conn):
+    """
+    Extrai a dimensão funcionario
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    dim_funcionario -- dataframe da dim_funcionario;
+    """
     dim_funcionario = dwt.read_table(
         conn=conn,
         schema='DW',
@@ -89,6 +134,15 @@ def extract_dim_funcionario(conn):
 
 
 def extract_dim_data(conn):
+    """
+    Extrai a dimensão data
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    dim_data -- dataframe da dim_data;
+    """
     dim_data = (
         dwt.read_table(
             conn=conn,
@@ -111,6 +165,15 @@ def extract_dim_data(conn):
 
 
 def extract_dim_produto(conn):
+    """
+    Extrai a dimensão dim_produto
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    dim_produto -- dataframe da dim_produto;
+    """
     dim_produto = (
         dwt.read_table(
             conn=conn,
@@ -134,6 +197,15 @@ def extract_dim_produto(conn):
 
 
 def extract_dim_loja(conn):
+    """
+    Extrai a dimensão loja
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    dim_produto -- dataframe da dim_produto;
+    """
     dim_loja = (
         dwt.read_table(
             conn=conn,
@@ -161,6 +233,15 @@ def extract_dim_loja(conn):
 
 
 def extract_stage_venda(conn):
+    """
+    Extrai a stage venda e item venda
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    stage_venda -- dataframe da stage_venda;
+    """
     stage_venda = (
         dwt.read_table(
             conn=conn,
@@ -210,6 +291,15 @@ def extract_stage_venda(conn):
 
 
 def extract_new_values(conn):
+    """
+    Extrai novos registros encontrados na stage venda
+
+    parâmetros:
+    conn -- conexão criada via SqlAlchemy com o servidor DW;
+
+    return:
+    stage_venda -- dataframe da stage_venda;
+    """
     stg_venda = extract_stage_venda(conn)
 
     fact_venda = extract_fact_venda(conn)
@@ -324,17 +414,11 @@ def extract_new_venda(conn):
     stg_cliente_endereco -- pandas.Dataframe;
     """
     stg_venda = extract_stage_venda(conn)
-
     dim_forma_pagamento = extract_dim_forma_pagamento(conn)
-
     dim_cliente = extract_dim_cliente(conn)
-
     dim_funcionario = extract_dim_funcionario(conn)
-
     dim_loja = extract_dim_loja(conn)
-
     dim_produto = extract_dim_produto(conn)
-
     dim_data = extract_dim_data(conn)
 
     stage_merged_dimensions = (
@@ -449,6 +533,15 @@ def treat_fact_venda(stg_venda):
 
 
 def treat_missing_data(fact_venda):
+    """
+    Faz o insert dos valores de data missing na fato venda
+
+    parâmetros:
+    fact_venda -- pandas.Dataframe;
+
+    return:
+    fact_venda -- pandas.Dataframe;
+    """
     fact_venda = (
         pd.DataFrame([
             [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
@@ -467,6 +560,7 @@ def load_fact_venda(fact_venda, conn, action):
     parâmetros:
     fact_venda -- pandas.Dataframe;
     conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    action -- if_exists (append, replace...)
     """
     data_type = {
         "SK_FORMA_PAGAMENTO": Integer(),

@@ -18,8 +18,8 @@ def extract_stg_cliente(conn):
     """
     stg_cliente = dwt.read_table(
         conn=conn,
-        schema="STAGE",
-        table_name="STG_CLIENTE",
+        schema="stage",
+        table_name="stg_cliente",
         columns=[
             'id_cliente',
             'nome',
@@ -31,8 +31,8 @@ def extract_stg_cliente(conn):
 
     stg_endereco = dwt.read_table(
         conn=conn,
-        schema='STAGE',
-        table_name='STG_ENDERECO',
+        schema='stage',
+        table_name='stg_endereco',
         columns=[
             'id_endereco',
             'estado',
@@ -68,18 +68,18 @@ def extract_dim_cliente(conn):
     try:
         dim_cliente = dwt.read_table(
             conn=conn,
-            schema="DW",
-            table_name="D_CLIENTE",
+            schema="dw",
+            table_name="d_cliente",
             columns=[
-                'SK_CLIENTE',
-                'CD_CLIENTE',
-                'NO_CLIENTE',
-                'NU_CPF',
-                'NU_TELEFONE',
-                'CD_ENDERECO_CLIENTE',
-                'NO_ESTADO',
-                'NO_BAIRRO',
-                'DS_RUA'
+                'sk_cliente',
+                'cd_cliente',
+                'no_cliente',
+                'nu_cpf',
+                'nu_telefone',
+                'cd_endereco_cliente',
+                'no_estado',
+                'no_bairro',
+                'ds_rua'
             ]
         )
         return dim_cliente
@@ -112,20 +112,20 @@ def extract_new_cliente(conn):
             SELECT * FROM \
             stg_cliente stg \
             LEFT JOIN dim_cliente dim \
-            ON stg.id_cliente = dim.CD_CLIENTE \
-            WHERE dim.CD_CLIENTE IS NULL')
+            ON stg.id_cliente = dim.cd_cliente \
+            WHERE dim.cd_cliente IS NULL')
     )
 
     new_values = (
         new_clientes.assign(
-            df_size=dim_cliente['SK_CLIENTE'].max() + 1
+            df_size=dim_cliente['sk_cliente'].max() + 1
         )
     )
 
     return new_values
 
 
-def treat_new_clientes(new_values):
+def treat_new_cliente(new_values):
     """
     Faz o tratamento dos novos registros encontrados na stage
 
@@ -137,16 +137,15 @@ def treat_new_clientes(new_values):
     trated_values -- registros atualizados no formato pandas.Dataframe;
     """
     columns_name = {
-        "id_cliente": "CD_CLIENTE",
-        "nome": "NO_CLIENTE",
-        "cpf": "NU_CPF",
-        "tel": "NU_TELEFONE",
-        "id_endereco": "CD_ENDERECO_CLIENTE",
-        "estado": "NO_ESTADO",
-        "cidade": "NO_CIDADE",
-        "bairro": "NO_BAIRRO",
-        "rua": "DS_RUA"
-
+        "id_cliente": "cd_cliente",
+        "nome": "no_cliente",
+        "cpf": "nu_cpf",
+        "tel": "nu_telefone",
+        "id_endereco": "cd_endereco_cliente",
+        "estado": "no_estado",
+        "cidade": "no_cidade",
+        "bairro": "no_bairro",
+        "rua": "ds_rua"
     }
 
     select_columns = [
@@ -163,17 +162,17 @@ def treat_new_clientes(new_values):
 
     dim_cliente = (
         new_values.
-            filter(select_columns).
-            rename(columns=columns_name).
-            assign(
-            NU_TELEFONE=lambda x: x.NU_TELEFONE.apply(
+        filter(select_columns).
+        rename(columns=columns_name).
+        assign(
+            nu_telefone=lambda x: x.nu_telefone.apply(
                 lambda y: y[0:8] + y[-5:]
             )
         )
     )
 
     size = new_values['df_size'].max()
-    dim_cliente.insert(0, 'SK_CLIENTE', range(size, size + len(dim_cliente)))
+    dim_cliente.insert(0, 'sk_cliente', range(size, size + len(dim_cliente)))
 
     return dim_cliente
 
@@ -190,17 +189,17 @@ def treat_dim_cliente(stg_cliente_endereco):
     """
 
     columns_name = {
-        "id_cliente": "CD_CLIENTE",
-        "nome": "NO_CLIENTE",
-        "cpf": "NU_CPF",
-        "tel": "NU_TELEFONE",
-        "id_endereco": "CD_ENDERECO_CLIENTE",
-        "estado": "NO_ESTADO",
-        "cidade": "NO_CIDADE",
-        "bairro": "NO_BAIRRO",
-        "rua": "DS_RUA"
-
+        "id_cliente": "cd_cliente",
+        "nome": "no_cliente",
+        "cpf": "nu_cpf",
+        "tel": "nu_telefone",
+        "id_endereco": "cd_endereco_cliente",
+        "estado": "no_estado",
+        "cidade": "no_cidade",
+        "bairro": "no_bairro",
+        "rua": "ds_rua"
     }
+
     select_columns = [
         "id_cliente",
         "nome",
@@ -215,15 +214,15 @@ def treat_dim_cliente(stg_cliente_endereco):
 
     dim_cliente = (
         stg_cliente_endereco.
-            filter(select_columns).
-            rename(columns=columns_name).
-            assign(
-            NU_TELEFONE=lambda x: x.NU_TELEFONE.apply(
+        filter(select_columns).
+        rename(columns=columns_name).
+        assign(
+            nu_telefone=lambda x: x.nu_telefone.apply(
                 lambda y: y[0:8] + y[-5:])
         )
     )
 
-    dim_cliente.insert(0, 'SK_CLIENTE', range(1, 1 + len(dim_cliente)))
+    dim_cliente.insert(0, 'sk_cliente', range(1, 1 + len(dim_cliente)))
 
     dim_cliente = (
         pd.DataFrame([
@@ -245,24 +244,24 @@ def load_dim_cliente(dim_cliente, conn, action):
     conn -- conexão criada via SqlAlchemy com o servidor do DW;
     """
     data_type = {
-        "SK_CLIENTE": Integer(),
-        "CD_CLIENTE": Integer(),
-        "NO_CLIENTE": String(),
-        "NU_CPF": String(),
-        "NU_TELEFONE": String(),
-        "CD_ENDERECO_CLIENTE": Integer(),
-        "NO_ESTADO": String(),
-        "NO_CIDADE": String(),
-        "NO_BAIRRO": String(),
-        "DS_RUA": String()
+        "sk_cliente": Integer(),
+        "cd_cliente": Integer(),
+        "no_cliente": String(),
+        "nu_cpf": String(),
+        "nu_telefone": String(),
+        "cd_endereco_cliente": Integer(),
+        "no_estado": String(),
+        "no_cidade": String(),
+        "no_bairro": String(),
+        "ds_rua": String()
     }
     (
         dim_cliente.
             astype('string').
             to_sql(
             con=conn,
-            name='D_CLIENTE',
-            schema='DW',
+            name='d_cliente',
+            schema='dw',
             if_exists=action,
             index=False,
             chunksize=100,
@@ -288,7 +287,7 @@ def run_dim_cliente(conn):
     else:
         (
             extract_new_cliente(conn).
-                pipe(treat_new_clientes).
+                pipe(treat_new_cliente).
                 pipe(load_dim_cliente, conn=conn, action='append')
         )
 

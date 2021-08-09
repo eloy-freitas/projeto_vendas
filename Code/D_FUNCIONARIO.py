@@ -78,7 +78,12 @@ def extract_new_funcionario(conn):
 
     new_funcionarios = (
         sqldf('\
-                SELECT * FROM \
+                SELECT stg.id_funcionario, \
+                stg.nome, \
+                stg.cpf, \
+                stg.tel, \
+                stg.data_nascimento \
+                FROM \
                 stg_funcionario stg \
                 LEFT JOIN dim_funcionario dim \
                 ON stg.id_funcionario = dim.cd_funcionario \
@@ -94,7 +99,7 @@ def extract_new_funcionario(conn):
     return new_values
 
 
-def treat_new_funcionario(new_values):
+def treat_dim_funcionario(new_values):
     """
     Faz o tratamento dos novos registros encontrados na stage
 
@@ -129,49 +134,16 @@ def treat_new_funcionario(new_values):
             dt_nascimento=lambda x: x.dt_nascimento.astype('datetime64'))
     )
 
-    size = new_values['df_size'].max()
-    dim_funcionario.insert(0, 'sk_funcionario', range(size, size + len(dim_funcionario)))
+    if 'df_size' in new_values.columns:
+        size = new_values['df_size'].max()
+        dim_funcionario.insert(0, 'sk_funcionario', range(size, size + len(dim_funcionario)))
+    else:
+        dim_funcionario.insert(0, 'sk_funcionario', range(1, 1 + len(dim_funcionario)))
 
     return dim_funcionario
 
 
-def treat_dim_funcionario(stg_funcionario):
-    """
-    Faz o tratamento dos dados extraidos das stages
-
-    parâmetros:
-    stg_funcionario -- pandas.Dataframe;
-
-    return:
-    dim_funcionario -- pandas.Dataframe;
-    """
-    columns_names = {
-        "id_funcionario": "cd_funcionario",
-        "nome": "no_funcionario",
-        "cpf": "nu_cpf",
-        "tel": "nu_telefone",
-        "data_nascimento": "dt_nascimento"
-    }
-
-    select_columns = [
-        "id_funcionario",
-        "nome",
-        "cpf",
-        "tel",
-        "data_nascimento"
-    ]
-
-    dim_funcionario = (
-        stg_funcionario.
-        filter(select_columns).
-        rename(columns=columns_names).
-        assign(
-            dt_nascimento=lambda x: x.dt_nascimento.astype('datetime64')
-        )
-    )
-
-    dim_funcionario.insert(0, 'sk_funcionario', range(1, 1 + len(dim_funcionario)))
-
+def treat_missing_data(dim_funcionario):
     dim_funcionario = (
         pd.DataFrame([
             [-1, -1, "Não informado", -1, -1, None],
@@ -228,12 +200,13 @@ def run_dim_funcionario(conn):
         (
             extract_stg_funcionario(conn).
             pipe(treat_dim_funcionario).
+            pipe(treat_missing_data).
             pipe(load_dim_funcionario, conn=conn, action='replace')
         )
     else:
         (
             extract_new_funcionario(conn).
-            pipe(treat_new_funcionario).
+            pipe(treat_dim_funcionario).
             pipe(load_dim_funcionario, conn=conn, action='append')
         )
 

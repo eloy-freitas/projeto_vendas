@@ -75,8 +75,8 @@ def extract_new_forma_pagamento(conn):
     new_funcionarios = (
         sqldf('\
                 SELECT \
-                stg.id_pagamento,\
-                stg.nome,\
+                stg.id_pagamento, \
+                stg.nome, \
                 stg.descricao \
                 FROM stg_forma_pagamento stg \
                 LEFT JOIN dim_forma_pagamento dim \
@@ -93,7 +93,7 @@ def extract_new_forma_pagamento(conn):
     return new_values
 
 
-def treat_new_forma_pagamento(new_values):
+def treat_dim_forma_pagamento(new_values):
     """
     Faz o tratamento dos novos registros encontrados na stage
 
@@ -105,9 +105,9 @@ def treat_new_forma_pagamento(new_values):
     dim_forma_pagamento -- dataframe dos novos registros tratados;
     """
     columns_names = {
-        "id_pagamento": "CD_FORMA_PAGAMENTO",
-        "nome": "NO_FORMA_PAGAMENTO",
-        "descricao": "DS_FORMA_PAGAMENTO"
+        "id_pagamento": "cd_forma_pagamento",
+        "nome": "no_forma_pagamento",
+        "descricao": "ds_forma_pagamento"
     }
 
     select_columns = [
@@ -129,55 +129,22 @@ def treat_new_forma_pagamento(new_values):
         )
     )
 
-    size = new_values['df_size'].max()
-    dim_forma_pagamento.insert(
-        0,
-        'sk_forma_pagamento',
-        range(size, size + len(dim_forma_pagamento)))
+    if 'df_size' in new_values.columns:
+        size = new_values['df_size'].max()
+        dim_forma_pagamento.insert(
+            0,
+            'sk_forma_pagamento',
+            range(size, size + len(dim_forma_pagamento)))
+    else:
+        dim_forma_pagamento.insert(
+            0,
+            'sk_forma_pagamento',
+            range(1, 1 + len(dim_forma_pagamento)))
 
     return dim_forma_pagamento
 
 
-def treat_dim_forma_pagamento(stg_forma_pagamento):
-    """
-    Faz o tratamento dos dados extraidos das stages
-
-    parâmetros:
-    stg_forma_pagamento -- pandas.Dataframe;
-
-    return:
-    dim_forma_pagamento -- pandas.Dataframe;
-    """
-    columns_names = {
-        "id_pagamento": "cd_forma_pagamento",
-        "nome": "no_forma_pagamento",
-        "descricao": "ds_forma_pagamento"
-    }
-
-    select_columns = [
-        "id_pagamento",
-        "nome",
-        "descricao"
-    ]
-
-    dim_forma_pagamento = (
-        stg_forma_pagamento.
-        filter(select_columns).
-        rename(columns=columns_names).
-        assign(
-            ds_forma_pagamento=lambda x: x.ds_forma_pagamento.
-            apply(
-                lambda y:
-                y[:-1].upper()
-                if y.endswith(",") or y.endswith(".")
-                else y.upper()))
-    )
-
-    dim_forma_pagamento.insert(
-        0,
-        'sk_forma_pagamento',
-        range(1, 1 + len(dim_forma_pagamento)))
-
+def treat_missing_data(dim_forma_pagamento):
     dim_forma_pagamento = (
         pd.DataFrame([
             [-1, -1, "Não informado", "Não informado"],
@@ -231,12 +198,13 @@ def run_dim_forma_pagamento(conn):
         (
             extract_stg_forma_pagamento(conn).
             pipe(treat_dim_forma_pagamento).
+            pipe(treat_missing_data).
             pipe(load_dim_forma_pagamento, conn=conn, action='replace')
         )
     else:
         (
             extract_new_forma_pagamento(conn).
-            pipe(treat_new_forma_pagamento).
+            pipe(treat_dim_forma_pagamento).
             pipe(load_dim_forma_pagamento, conn=conn, action='append')
         )
 

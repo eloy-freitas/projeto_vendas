@@ -10,7 +10,7 @@ def create_stg_venda(conn_dw):
         conn_output=conn_dw,
         schema_in='public',
         table='VENDA',
-        stg_name='STG_VENDA',
+        stg_name='stg_venda',
         tbl_exists='replace'
 
     )
@@ -25,7 +25,7 @@ def create_stg_item_venda(conn_dw):
         conn_output=conn_dw,
         schema_in='public',
         table='ITEM_VENDA',
-        stg_name='STG_ITEM_VENDA',
+        stg_name='stg_item_venda',
         tbl_exists='replace'
 
     )
@@ -40,7 +40,7 @@ def create_stg_loja(conn_dw):
         conn_output=conn_dw,
         schema_in='public',
         table='LOJA',
-        stg_name='STG_LOJA',
+        stg_name='stg_loja',
         tbl_exists='replace'
 
     )
@@ -55,7 +55,7 @@ def create_stg_produto(conn_dw):
         conn_output=conn_dw,
         schema_in='public',
         table='PRODUTO',
-        stg_name='STG_PRODUTO',
+        stg_name='stg_produto',
         tbl_exists='replace'
 
     )
@@ -70,7 +70,7 @@ def create_stg_forma_pagamento(conn_dw):
         conn_output=conn_dw,
         schema_in='public',
         table='FORMA_PAGAMENTO',
-        stg_name='STG_FORMA_PAGAMENTO',
+        stg_name='stg_forma_pagamento',
         tbl_exists='replace'
 
     )
@@ -85,7 +85,7 @@ def create_stg_cliente(conn_dw):
         conn_output=conn_dw,
         schema_in='public',
         table='CLIENTE',
-        stg_name='STG_CLIENTE',
+        stg_name='stg_cliente',
         tbl_exists='replace'
 
     )
@@ -100,7 +100,7 @@ def create_stg_funcionario(conn_dw):
         conn_output=conn_dw,
         schema_in='public',
         table='FUNCIONARIO',
-        stg_name='STG_FUNCIONARIO',
+        stg_name='stg_funcionario',
         tbl_exists='replace'
 
     )
@@ -115,7 +115,7 @@ def create_stg_endereco(conn_dw):
         conn_output=conn_dw,
         schema_in='public',
         table='ENDERECO',
-        stg_name='STG_ENDERECO',
+        stg_name='stg_endereco',
         tbl_exists='replace'
 
     )
@@ -132,11 +132,11 @@ if __name__ == '__main__':
         port="5432"
     )
 
-    create_stg_venda(conn_dw)
-    create_stg_funcionario(conn_dw)
-    create_stg_forma_pagamento(conn_dw)
-    create_stg_item_venda(conn_dw)
-    create_stg_produto(conn_dw)
+    #create_stg_venda(conn_dw)
+    #create_stg_funcionario(conn_dw)
+    #create_stg_forma_pagamento(conn_dw)
+    #create_stg_item_venda(conn_dw)
+    #create_stg_produto(conn_dw)
     create_stg_loja(conn_dw)
-    create_stg_cliente(conn_dw)
-    create_stg_endereco(conn_dw)
+    #create_stg_cliente(conn_dw)
+    #create_stg_endereco(conn_dw)

@@ -18,7 +18,7 @@ def create_stage(conn_input, conn_output, schema_in, table, stg_name, tbl_exists
         read_table(conn=conn_input, schema=schema_in, table_name=table).
             to_sql(name=stg_name,
                    con=conn_output,
-                   schema="STAGE",
+                   schema="stage",
                    if_exists=tbl_exists,
                    index=False)
     )

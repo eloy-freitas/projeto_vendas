@@ -109,7 +109,17 @@ def extract_new_cliente(conn):
 
     new_clientes = (
         sqldf('\
-            SELECT * FROM \
+            SELECT \
+            stg.id_cliente, \
+            stg.nome, \
+            stg.cpf, \
+            stg.tel, \
+            stg.id_endereco, \
+            stg.estado, \
+            stg.cidade, \
+            stg.bairro, \
+            stg.rua \
+            FROM \
             stg_cliente stg \
             LEFT JOIN dim_cliente dim \
             ON stg.id_cliente = dim.cd_cliente \
@@ -125,7 +135,7 @@ def extract_new_cliente(conn):
     return new_values
 
 
-def treat_new_cliente(new_values):
+def treat_dim_cliente(new_values):
     """
     Faz o tratamento dos novos registros encontrados na stage
 
@@ -171,59 +181,16 @@ def treat_new_cliente(new_values):
         )
     )
 
-    size = new_values['df_size'].max()
-    dim_cliente.insert(0, 'sk_cliente', range(size, size + len(dim_cliente)))
+    if 'df_size' in new_values.columns:
+        size = new_values['df_size'].max()
+        dim_cliente.insert(0, 'sk_cliente', range(size, size + len(dim_cliente)))
+    else:
+        dim_cliente.insert(0, 'sk_cliente', range(1, 1 + len(dim_cliente)))
 
     return dim_cliente
 
 
-def treat_dim_cliente(stg_cliente_endereco):
-    """
-    Faz o tratamento dos dados extraidos das stages
-
-    parâmetros:
-    stg_cliente_endereco -- pandas.Dataframe;
-
-    return:
-    dim_cliente -- pandas.Dataframe;
-    """
-
-    columns_name = {
-        "id_cliente": "cd_cliente",
-        "nome": "no_cliente",
-        "cpf": "nu_cpf",
-        "tel": "nu_telefone",
-        "id_endereco": "cd_endereco_cliente",
-        "estado": "no_estado",
-        "cidade": "no_cidade",
-        "bairro": "no_bairro",
-        "rua": "ds_rua"
-    }
-
-    select_columns = [
-        "id_cliente",
-        "nome",
-        "cpf",
-        "tel",
-        'id_endereco',
-        "estado",
-        "cidade",
-        "bairro",
-        "rua"
-    ]
-
-    dim_cliente = (
-        stg_cliente_endereco.
-        filter(select_columns).
-        rename(columns=columns_name).
-        assign(
-            nu_telefone=lambda x: x.nu_telefone.apply(
-                lambda y: y[0:8] + y[-5:])
-        )
-    )
-
-    dim_cliente.insert(0, 'sk_cliente', range(1, 1 + len(dim_cliente)))
-
+def treat_missing_data(dim_cliente):
     dim_cliente = (
         pd.DataFrame([
             [-1, -1, "Não informado", "Não informado", "Não informado", -1, "Não informado", "Não informado", "Não informado", "Não informado"],
@@ -257,8 +224,8 @@ def load_dim_cliente(dim_cliente, conn, action):
     }
     (
         dim_cliente.
-            astype('string').
-            to_sql(
+        astype('string').
+        to_sql(
             con=conn,
             name='d_cliente',
             schema='dw',
@@ -281,14 +248,15 @@ def run_dim_cliente(conn):
     if dim_cliente is None:
         (
             extract_stg_cliente(conn).
-                pipe(treat_dim_cliente).
-                pipe(load_dim_cliente, conn=conn, action='replace')
+            pipe(treat_dim_cliente).
+            pipe(treat_missing_data).
+            pipe(load_dim_cliente, conn=conn, action='replace')
         )
     else:
         (
             extract_new_cliente(conn).
-                pipe(treat_new_cliente).
-                pipe(load_dim_cliente, conn=conn, action='append')
+            pipe(treat_dim_cliente).
+            pipe(load_dim_cliente, conn=conn, action='append')
         )
 
 

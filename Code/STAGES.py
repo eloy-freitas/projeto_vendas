@@ -132,11 +132,11 @@ if __name__ == '__main__':
         port="5432"
     )
 
-    #create_stg_venda(conn_dw)
-    #create_stg_funcionario(conn_dw)
-    #create_stg_forma_pagamento(conn_dw)
-    #create_stg_item_venda(conn_dw)
-    #create_stg_produto(conn_dw)
+    create_stg_venda(conn_dw)
+    create_stg_funcionario(conn_dw)
+    create_stg_forma_pagamento(conn_dw)
+    create_stg_item_venda(conn_dw)
+    create_stg_produto(conn_dw)
     create_stg_loja(conn_dw)
-    #create_stg_cliente(conn_dw)
-    #create_stg_endereco(conn_dw)
+    create_stg_cliente(conn_dw)
+    create_stg_endereco(conn_dw)

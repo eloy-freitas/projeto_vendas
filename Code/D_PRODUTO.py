@@ -47,7 +47,6 @@ categorias = {'cafe da manhã': {"CAFE", "ACHOCOLATADO", "CEREAIS", "PAO",
 def classificar_produto(nome):
     """
     Classifica o produto baseado nas palavras chaves no nome
-
     parâmetros:
     nome -- string que representa o nome do produto;
     """
@@ -60,10 +59,8 @@ def classificar_produto(nome):
 def extract_stage_produto(conn):
     """
     Extrai todas as tabelas necessárias para gerar a dimensão produto
-
     parâmetros:
     conn -- conexão criada via SqlAlchemy com o servidor DW;
-
     return:
     stg_produto -- pandas.Dataframe;
     """
@@ -88,18 +85,16 @@ def extract_stage_produto(conn):
 def extract_dim_produto(conn):
     """
     Extrai os dados da dimensão produto
-
     parâmetros:
     conn -- conexão criada via SqlAlchemy com o servidor DW;
-
     return:
     dim_produto -- pandas.Dataframe;
     """
     try:
         dim_produto = dwt.read_table(
             conn=conn,
-            schema='DW',
-            table_name='D_PRODUTO',
+            schema='dw',
+            table_name='d_produto',
             columns=[
                 'sk_produto',
                 'cd_produto',
@@ -124,10 +119,8 @@ def extract_dim_produto(conn):
 def treat_dim_produto(stg_produto):
     """
     Faz o tratamento dos dados extraidos das stages
-
     parâmetros:
     stg_produto -- pandas.Dataframe;
-
     return:
     dim_produto -- pandas.Dataframe;
     """
@@ -178,10 +171,8 @@ def treat_dim_produto(stg_produto):
 def extract_new_produto(conn):
     """
     Extrai novos registros e registros atualizados na stage
-
     parâmetros:
     conn -- conexão criada via SqlAlchemy com o servidor DW;
-
     return:
     new_values: dataframe com as atualizações
     """
@@ -205,7 +196,7 @@ def extract_new_produto(conn):
             SELECT df_stage.*\
             FROM df_stage\
             LEFT JOIN df_dw \
-            ON (df_stage.cd_produto = df_dw.cd_produto)\
+            ON df_stage.cd_produto = df_dw.cd_produto\
             WHERE df_dw.cd_produto IS NULL").
         assign(
             fl_tipo_update=1
@@ -242,18 +233,16 @@ def extract_new_produto(conn):
             df_size=df_dw['sk_produto'].max() + 1
         )
     )
-
+    print(new_updates)
     return new_values
 
 
 def treat_new_produto(new_values, conn):
     """
     Faz o tratamento dos fluxos de execução da SCD produto
-
     parâmetros:
     conn -- conexão criada via SqlAlchemy com o servidor DW;
     new_values -- novos registros ou registros atualizados no formato pandas.Dataframe;
-
     return:
     trated_values -- registros atualizados no formato pandas.Dataframe;
     """
@@ -270,8 +259,8 @@ def treat_new_produto(new_values, conn):
     new_names = new_values.query('fl_tipo_update == 3')
 
     if len(new_values) > 0:
-        for cd in new_names['CD_PRODUTO']:
-            nome = new_names.query(f"CD_PRODUTO == {cd}")["NO_PRODUTO"].item()
+        for cd in new_names['cd_produto']:
+            nome = new_names.query(f"cd_produto == {cd}")["no_produto"].item()
             sql = (
                 f'\
                 UPDATE "dw"."d_produto"\
@@ -314,7 +303,6 @@ def treat_new_produto(new_values, conn):
 def load_dim_produto(dim_produto, conn, action):
     """
     Faz a carga da dimensão produto no DW.
-
     parâmetros:
     dim_produto -- pandas.Dataframe;
     conn -- conexão criada via SqlAlchemy com o servidor do DW;
@@ -352,7 +340,6 @@ def load_dim_produto(dim_produto, conn, action):
 def run_dim_produto(conn):
     """
     Executa o pipeline da dimensão produto.
-
     parâmetros:
     conn -- conexão criada via SqlAlchemy com o servidor do DW;
     """
@@ -383,4 +370,3 @@ if __name__ == '__main__':
     start = t.time()
     run_dim_produto(conn_dw)
     print(f'exec time = {t.time() - start}')
-

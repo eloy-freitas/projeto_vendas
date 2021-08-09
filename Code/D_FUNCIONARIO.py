@@ -18,8 +18,8 @@ def extract_stg_funcionario(conn):
     """
     stg_funcionario = dwt.read_table(
         conn=conn,
-        schema='STAGE',
-        table_name='STG_FUNCIONARIO',
+        schema='stage',
+        table_name='stg_funcionario',
         columns=[
             'id_funcionario',
             'nome',
@@ -45,14 +45,15 @@ def extract_dim_funcionario(conn):
     try:
         dim_funcionario = dwt.read_table(
             conn=conn,
-            schema='DW',
-            table_name='D_FUNCIONARIO',
+            schema='dw',
+            table_name='d_funcionario',
             columns=[
-                'SK_FUNCIONARIO',
-                'CD_FUNCIONARIO',
-                'NO_FUNCIONARIO',
-                'NU_CPF',
-                'DT_NASCIMENTO'
+                'sk_funcionario',
+                'cd_funcionario',
+                'no_funcionario',
+                'nu_cpf',
+                'nu_telefone',
+                'dt_nascimento'
             ]
         )
 
@@ -80,13 +81,13 @@ def extract_new_funcionario(conn):
                 SELECT * FROM \
                 stg_funcionario stg \
                 LEFT JOIN dim_funcionario dim \
-                ON stg.id_funcionario = dim.CD_FUNCIONARIO \
-                WHERE dim.CD_FUNCIONARIO IS NULL')
+                ON stg.id_funcionario = dim.cd_funcionario \
+                WHERE dim.cd_funcionario IS NULL')
     )
 
     new_values = (
         new_funcionarios.assign(
-            df_size=dim_funcionario['SK_FUNCIONARIO'].max() + 1
+            df_size=dim_funcionario['sk_funcionario'].max() + 1
         )
     )
 
@@ -105,11 +106,11 @@ def treat_new_funcionario(new_values):
     trated_values -- dataframe dos novos registros tratados;
     """
     columns_names = {
-        "id_funcionario": "CD_FUNCIONARIO",
-        "nome": "NO_FUNCIONARIO",
-        "cpf": "NU_CPF",
-        "tel": "NU_TELEFONE",
-        "data_nascimento": "DT_NASCIMENTO"
+        "id_funcionario": "cd_funcionario",
+        "nome": "no_funcionario",
+        "cpf": "nu_cpf",
+        "tel": "nu_telefone",
+        "data_nascimento": "dt_nascimento"
     }
 
     select_columns = [
@@ -122,14 +123,14 @@ def treat_new_funcionario(new_values):
 
     dim_funcionario = (
         new_values.
-            filter(select_columns).
-            rename(columns=columns_names).
-            assign(
-            DT_NASCIMENTO=lambda x: x.DT_NASCIMENTO.astype('datetime64'))
+        filter(select_columns).
+        rename(columns=columns_names).
+        assign(
+            dt_nascimento=lambda x: x.dt_nascimento.astype('datetime64'))
     )
 
     size = new_values['df_size'].max()
-    dim_funcionario.insert(0, 'SK_FUNCIONARIO', range(size, size + len(dim_funcionario)))
+    dim_funcionario.insert(0, 'sk_funcionario', range(size, size + len(dim_funcionario)))
 
     return dim_funcionario
 
@@ -145,11 +146,11 @@ def treat_dim_funcionario(stg_funcionario):
     dim_funcionario -- pandas.Dataframe;
     """
     columns_names = {
-        "id_funcionario": "CD_FUNCIONARIO",
-        "nome": "NO_FUNCIONARIO",
-        "cpf": "NU_CPF",
-        "tel": "NU_TELEFONE",
-        "data_nascimento": "DT_NASCIMENTO"
+        "id_funcionario": "cd_funcionario",
+        "nome": "no_funcionario",
+        "cpf": "nu_cpf",
+        "tel": "nu_telefone",
+        "data_nascimento": "dt_nascimento"
     }
 
     select_columns = [
@@ -162,13 +163,14 @@ def treat_dim_funcionario(stg_funcionario):
 
     dim_funcionario = (
         stg_funcionario.
-            filter(select_columns).
-            rename(columns=columns_names).
-            assign(
-            DT_NASCIMENTO=lambda x: x.DT_NASCIMENTO.astype('datetime64'))
+        filter(select_columns).
+        rename(columns=columns_names).
+        assign(
+            dt_nascimento=lambda x: x.dt_nascimento.astype('datetime64')
+        )
     )
 
-    dim_funcionario.insert(0, 'SK_FUNCIONARIO', range(1, 1 + len(dim_funcionario)))
+    dim_funcionario.insert(0, 'sk_funcionario', range(1, 1 + len(dim_funcionario)))
 
     dim_funcionario = (
         pd.DataFrame([
@@ -190,21 +192,21 @@ def load_dim_funcionario(dim_funcionario, conn, action):
     conn -- conexão criada via SqlAlchemy com o servidor do DW;
     """
     data_types = {
-        "SK_FUNCIONARIO": Integer(),
-        "CD_FUNCIONARIO": Integer(),
-        "NO_FUNCIONARIO": String(),
-        "NU_CPF": String(),
-        "NU_TELEFONE": String(),
-        "DT_NASCIMENTO": Date()
+        "sk_funcionario": Integer(),
+        "cd_funcionario": Integer(),
+        "no_funcionario": String(),
+        "nu_cpf": String(),
+        "nu_telefone": String(),
+        "dt_nascimento": Date()
     }
 
     (
         dim_funcionario.
-            astype('string').
-            to_sql(
+        astype('string').
+        to_sql(
             con=conn,
-            name='D_FUNCIONARIO',
-            schema='DW',
+            name='d_funcionario',
+            schema='dw',
             if_exists=action,
             index=False,
             chunksize=100,
@@ -225,14 +227,14 @@ def run_dim_funcionario(conn):
     if dim_funcionario is None:
         (
             extract_stg_funcionario(conn).
-                pipe(treat_dim_funcionario).
-                pipe(load_dim_funcionario, conn=conn, action='replace')
+            pipe(treat_dim_funcionario).
+            pipe(load_dim_funcionario, conn=conn, action='replace')
         )
     else:
         (
             extract_new_funcionario(conn).
-                pipe(treat_new_funcionario).
-                pipe(load_dim_funcionario, conn=conn, action='append')
+            pipe(treat_new_funcionario).
+            pipe(load_dim_funcionario, conn=conn, action='append')
         )
 
 

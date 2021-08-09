@@ -8,13 +8,13 @@ from CONEXAO import create_connection_postgre
 
 pd.set_option('display.max_columns', None)
 columns_names = {
-    "id_produto": "CD_PRODUTO",
-    "nome_produto": "NO_PRODUTO",
-    "cod_barra": "CD_BARRA",
-    "preco_custo": "VL_PRECO_CUSTO",
-    "percentual_lucro": "VL_PERCENTUAL_LUCRO",
-    "data_cadastro": "DT_CADASTRO",
-    "ativo": "FL_ATIVO"
+    "id_produto": "cd_produto",
+    "nome_produto": "no_produto",
+    "cod_barra": "cd_barra",
+    "preco_custo": "vl_preco_custo",
+    "percentual_lucro": "vl_percentual_lucro",
+    "data_cadastro": "dt_cadastro",
+    "ativo": "fl_ativo"
 }
 
 categorias = {'cafe da manhã': {"CAFE", "ACHOCOLATADO", "CEREAIS", "PAO",
@@ -69,8 +69,8 @@ def extract_stage_produto(conn):
     """
     stg_produto = dwt.read_table(
         conn=conn,
-        schema='STAGE',
-        table_name='STG_PRODUTO',
+        schema='stage',
+        table_name='stg_produto',
         columns=[
             'id_produto',
             'nome_produto',
@@ -78,8 +78,7 @@ def extract_stage_produto(conn):
             'preco_custo',
             'percentual_lucro',
             'data_cadastro',
-            'ativo'
-        ],
+            'ativo'],
         where=f'"id_produto" > 0 order by "id_produto";'
     )
 
@@ -102,21 +101,20 @@ def extract_dim_produto(conn):
             schema='DW',
             table_name='D_PRODUTO',
             columns=[
-                'SK_PRODUTO',
-                'CD_PRODUTO',
-                'NO_PRODUTO',
-                'CD_BARRA',
-                'VL_PRECO_CUSTO',
-                'VL_PERCENTUAL_LUCRO',
-                'DT_CADASTRO',
-                'FL_ATIVO',
-                'DT_INICIO',
-                'DT_FIM',
-                'DS_CATEGORIA'
-            ],
-            where=f'"CD_PRODUTO" > 0 \
-            and "FL_ATIVO" = 1\
-            order by "CD_PRODUTO";'
+                'sk_produto',
+                'cd_produto',
+                'no_produto',
+                'cd_barra',
+                'vl_preco_custo',
+                'vl_percentual_lucro',
+                'dt_cadastro',
+                'fl_ativo',
+                'dt_inicio',
+                'dt_fim',
+                'ds_categoria'],
+            where=f'"cd_produto" > 0 \
+            and "fl_ativo" = 1\
+            order by "cd_produto";'
         )
         return dim_produto
     except:
@@ -144,27 +142,27 @@ def treat_dim_produto(stg_produto):
     ]
     dim_produto = (
         stg_produto.
-            filter(select_columns).
-            rename(columns=columns_names).
-            assign(
-            VL_PRECO_CUSTO=lambda x: x.VL_PRECO_CUSTO.apply(
+        filter(select_columns).
+        rename(columns=columns_names).
+        assign(
+            vl_preco_custo=lambda x: x.vl_preco_custo.apply(
                 lambda y: float(y.replace(",", "."))),
-            VL_PERCENTUAL_LUCRO=lambda x: x.VL_PERCENTUAL_LUCRO.apply(
+            vl_percentual_lucro=lambda x: x.vl_percentual_lucro.apply(
                 lambda y: float(y.replace(",", "."))),
-            DT_CADASTRO=lambda x: x.DT_CADASTRO.apply(
+            dt_cadastro=lambda x: x.dt_cadastro.apply(
                 lambda y: y[:10]),
-            DT_INICIO=lambda x: pd.to_datetime(x.DT_CADASTRO),
-            DT_FIM=None).
-            assign(
-            DS_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
+            dt_inicio=lambda x: pd.to_datetime(x.dt_cadastro),
+            dt_fim=None).
+        assign(
+            ds_categoria=lambda x: x.no_produto.apply(
                 lambda y: classificar_produto(y))).
-            assign(
-            DT_CADASTRO=lambda x: pd.to_datetime(x.DT_CADASTRO),
-            NO_PRODUTO=lambda x: x.NO_PRODUTO.astype(str),
-            FL_ATIVO=lambda x: x.FL_ATIVO.astype("int64"))
+        assign(
+            dt_cadastro=lambda x: pd.to_datetime(x.dt_cadastro),
+            no_produto=lambda x: x.no_produto.astype(str),
+            fl_ativo=lambda x: x.fl_ativo.astype("int64"))
     )
 
-    dim_produto.insert(0, 'SK_PRODUTO', range(1, 1 + len(dim_produto)))
+    dim_produto.insert(0, 'sk_produto', range(1, 1 + len(dim_produto)))
 
     dim_produto = (
         pd.DataFrame([
@@ -189,50 +187,51 @@ def extract_new_produto(conn):
     """
     df_stage = (
         extract_stage_produto(conn).
-            rename(columns=columns_names).
-            assign(
-            VL_PRECO_CUSTO=lambda x:
-            x.VL_PRECO_CUSTO.apply(lambda y:
-                                   float(y.replace(",", "."))),
-            VL_PERCENTUAL_LUCRO=lambda x:
-            x.VL_PERCENTUAL_LUCRO.apply(lambda y:
-                                        float(y.replace(",", "."))),
-            DT_CADASTRO=lambda x: x.DT_CADASTRO.apply(
+        rename(columns=columns_names).
+        assign(
+            vl_preco_custo=lambda x: x.vl_preco_custo.apply(
+                lambda y: float(y.replace(",", "."))),
+            vl_percentual_lucro=lambda x: x.vl_percentual_lucro.apply(
+                lambda y: float(y.replace(",", "."))),
+            dt_cadastro=lambda x: x.dt_cadastro.apply(
                 lambda y: y[:10])).
-            assign(DT_CADASTRO=lambda x: x.DT_CADASTRO.astype("datetime64"))
+        assign(dt_cadastro=lambda x: x.dt_cadastro.astype("datetime64"))
     )
 
     df_dw = extract_dim_produto(conn)
 
     new_records = (
-        sqldf("SELECT df_stage.*\
-                    FROM df_stage\
-                    LEFT JOIN df_dw \
-                    ON (df_stage.CD_PRODUTO = df_dw.CD_PRODUTO)\
-                    WHERE df_dw.CD_PRODUTO IS NULL").
+        sqldf("\
+            SELECT df_stage.*\
+            FROM df_stage\
+            LEFT JOIN df_dw \
+            ON (df_stage.cd_produto = df_dw.cd_produto)\
+            WHERE df_dw.cd_produto IS NULL").
         assign(
             fl_tipo_update=1
         )
     )
 
     new_updates = (
-        sqldf(f"select stg.* \
-                    from df_stage stg \
-                    inner join df_dw dw \
-                    on stg.CD_PRODUTO = dw.CD_PRODUTO \
-                    where stg.VL_PRECO_CUSTO != dw.VL_PRECO_CUSTO\
-                    or stg.VL_PERCENTUAL_LUCRO != dw.VL_PERCENTUAL_LUCRO").
-            assign(
+        sqldf("\
+            SELECT stg.* \
+            FROM df_stage stg \
+            INNER JOIN df_dw dw \
+            ON stg.cd_produto = dw.cd_produto \
+            WHERE stg.vl_preco_custo != dw.vl_preco_custo\
+            OR stg.vl_percentual_lucro != dw.vl_percentual_lucro").
+        assign(
             fl_tipo_update=2
         )
     )
 
     new_names = (
-        sqldf(f"select stg.* \
-                        from df_stage stg \
-                        inner join df_dw dw \
-                        on stg.CD_PRODUTO = dw.CD_PRODUTO \
-                        where stg.NO_PRODUTO != dw.NO_PRODUTO").
+        sqldf("\
+            SELECT stg.* \
+            FROM df_stage stg \
+            INNER JOIN df_dw dw \
+            ON stg.cd_produto = dw.cd_produto \
+            WHERE stg.no_produto != dw.no_produto").
         assign(
             fl_tipo_update=3
         )
@@ -240,7 +239,7 @@ def extract_new_produto(conn):
 
     new_values = (
         pd.concat([new_records, new_updates, new_names]).assign(
-            df_size=df_dw['SK_PRODUTO'].max() + 1
+            df_size=df_dw['sk_produto'].max() + 1
         )
     )
 
@@ -259,12 +258,12 @@ def treat_new_produto(new_values, conn):
     trated_values -- registros atualizados no formato pandas.Dataframe;
     """
     select_columns = [
-        "CD_PRODUTO",
-        "NO_PRODUTO",
-        "CD_BARRA",
-        "DT_CADASTRO",
-        "VL_PRECO_CUSTO",
-        "VL_PERCENTUAL_LUCRO"
+        "cd_produto",
+        "no_produto",
+        "cd_barra",
+        "dt_cadastro",
+        "vl_preco_custo",
+        "vl_percentual_lucro"
     ]
 
     size = new_values['df_size'].max()
@@ -273,9 +272,12 @@ def treat_new_produto(new_values, conn):
     if len(new_values) > 0:
         for cd in new_names['CD_PRODUTO']:
             nome = new_names.query(f"CD_PRODUTO == {cd}")["NO_PRODUTO"].item()
-            sql = f'update "DW"."D_PRODUTO"\
-                set "NO_PRODUTO" = \'{str(nome)}\'\
-                 where "CD_PRODUTO" = {cd} and "FL_ATIVO" = 1;'
+            sql = (
+                f'\
+                UPDATE "dw"."d_produto"\
+                SET "no_produto" = \'{str(nome)}\'\
+                WHERE "cd_produto" = {cd} AND "fl_ativo" = 1;'
+            )
             conn.execute(sql)
 
     # extraindo linhas que serão atualizadas
@@ -284,23 +286,26 @@ def treat_new_produto(new_values, conn):
         query('fl_tipo_update != 3').
         filter(select_columns).
         assign(
-            DT_INICIO=lambda x: pd.to_datetime("today"),
-            DT_FIM=None,
-            FL_ATIVO=lambda x: 1,
-            DT_CADASTRO=lambda x: x.DT_CADASTRO.astype("datetime64"),
-            DS_CATEGORIA=lambda x: x.NO_PRODUTO.apply(
+            dt_inicio=lambda x: pd.to_datetime("today"),
+            dt_fim=None,
+            fl_ativo=lambda x: 1,
+            dt_cadastro=lambda x: x.dt_cadastro.astype("datetime64"),
+            ds_categoria=lambda x: x.no_produto.apply(
                 lambda y: classificar_produto(y))
         )
     )
 
-    trated_values.insert(0, 'SK_PRODUTO', range(size, size + len(new_values)))
+    trated_values.insert(0, 'sk_produto', range(size, size + len(new_values)))
 
     # identificando as sks que precisam ser atualizadas
-    for cd in trated_values['CD_PRODUTO']:
-        sql = f'update "DW"."D_PRODUTO"\
-                set "FL_ATIVO" = {0},\
-                "DT_FIM" = \'{pd.to_datetime("today")}\'\
-                where "CD_PRODUTO" = {cd} and "FL_ATIVO" = 1;'
+    for cd in trated_values['cd_produto']:
+        sql = (
+            f'\
+                UPDATE "dw"."d_produto"\
+                SET "fl_ativo" = {0},\
+                "dt_fim" = \'{pd.to_datetime("today")}\'\
+                WHERE "cd_produto" = {cd} and "fl_ativo" = 1;'
+        )
         conn.execute(sql)
 
     return trated_values
@@ -316,26 +321,26 @@ def load_dim_produto(dim_produto, conn, action):
     action -- if_exists (append, replace...)
     """
     data_types = {
-        "SK_PRODUTO": Integer(),
-        "CD_PRODUTO": Integer(),
-        "NO_PRODUTO": String(),
-        "CD_BARRA": String(),
-        "VL_PRECO_CUSTO": Float(),
-        "VL_PERCENTUAL_LUCRO": Float(),
-        "DT_CADASTRO": DateTime(),
-        "FL_ATIVO": Integer(),
-        "DT_INICIO": DateTime(),
-        "DT_FIM": DateTime(),
-        "DS_CATEGORIA": String()
+        "sk_produto": Integer(),
+        "cd_produto": Integer(),
+        "no_produto": String(),
+        "cd_barra": String(),
+        "vl_preco_custo": Float(),
+        "vl_percentual_lucro": Float(),
+        "dt_cadastro": DateTime(),
+        "fl_ativo": Integer(),
+        "dt_inicio": DateTime(),
+        "dt_fim": DateTime(),
+        "ds_categoria": String()
     }
 
     (
         dim_produto.
-            astype('string').
-            to_sql(
+        astype('string').
+        to_sql(
             con=conn,
-            name='D_PRODUTO',
-            schema='DW',
+            name='d_produto',
+            schema='dw',
             if_exists=action,
             index=False,
             chunksize=100,
@@ -355,15 +360,15 @@ def run_dim_produto(conn):
     if dim_produto is None:
         (
             extract_stage_produto(conn).
-                pipe(treat_dim_produto).
-                pipe(load_dim_produto, conn=conn, action='replace')
+            pipe(treat_dim_produto).
+            pipe(load_dim_produto, conn=conn, action='replace')
 
         )
     else:
         (
             extract_new_produto(conn).
-                pipe(treat_new_produto, conn=conn).
-                pipe(load_dim_produto, conn=conn, action='append')
+            pipe(treat_new_produto, conn=conn).
+            pipe(load_dim_produto, conn=conn, action='append')
         )
 
 

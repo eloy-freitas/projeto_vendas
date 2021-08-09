@@ -21,20 +21,20 @@ def verify_fact_exists(conn):
     try:
         fact_venda = dwt.read_table(
             conn=conn,
-            schema='DW',
-            table_name='F_VENDA',
+            schema='dw',
+            table_name='f_venda',
             columns=[
-                'SK_FORMA_PAGAMENTO',
-                'SK_CLIENTE',
-                'SK_FUNCIONARIO',
-                'SK_LOJA',
-                'SK_PRODUTO',
-                'SK_DT_VENDA',
-                'NU_NFC',
-                'QTD_PRODUTO',
-                'VL_PRECO_CUSTO',
-                'VL_PERCENTUAL_LUCRO'],
-            where='"SK_LOJA" > 0 LIMIT 10'
+                'sk_forma_pagamento',
+                'sk_cliente',
+                'sk_funcionario',
+                'sk_loja',
+                'sk_produto',
+                'sk_dt_venda',
+                'nu_nfc',
+                'qtd_produto',
+                'vl_preco_custo',
+                'vl_percentual_lucro'],
+            where='"sk_loja" > 0 LIMIT 10'
         )
 
         return fact_venda
@@ -57,16 +57,16 @@ def extract_fact_venda(conn):
         schema='DW',
         table_name='F_VENDA',
         columns=[
-            'SK_FORMA_PAGAMENTO',
-            'SK_CLIENTE',
-            'SK_FUNCIONARIO',
-            'SK_LOJA',
-            'SK_PRODUTO',
-            'SK_DT_VENDA',
-            'NU_NFC',
-            'QTD_PRODUTO',
-            'VL_PRECO_CUSTO',
-            'VL_PERCENTUAL_LUCRO'
+            'sk_forma_pagamento',
+            'sk_cliente',
+            'sk_funcionario',
+            'sk_loja',
+            'sk_produto',
+            'sk_dt_venda',
+            'nu_nfc',
+            'qtd_produto',
+            'vl_preco_custo',
+            'vl_percentual_lucro'
         ]
     )
 
@@ -85,9 +85,9 @@ def extract_dim_forma_pagamento(conn):
     """
     dim_forma_pagamento = dwt.read_table(
         conn=conn,
-        schema='DW',
-        table_name='D_FORMA_PAGAMENTO',
-        columns=["SK_FORMA_PAGAMENTO", "CD_FORMA_PAGAMENTO"]
+        schema='dw',
+        table_name='d_forma_pagamento',
+        columns=["sk_forma_pagamento", "cd_forma_pagamento"]
     )
 
     return dim_forma_pagamento
@@ -105,9 +105,9 @@ def extract_dim_cliente(conn):
     """
     dim_cliente = dwt.read_table(
         conn=conn,
-        schema='DW',
-        table_name='D_CLIENTE',
-        columns=["SK_CLIENTE", "CD_CLIENTE"]
+        schema='dw',
+        table_name='d_cliente',
+        columns=["sk_cliente", "cd_cliente"]
     )
 
     return dim_cliente
@@ -125,9 +125,9 @@ def extract_dim_funcionario(conn):
     """
     dim_funcionario = dwt.read_table(
         conn=conn,
-        schema='DW',
-        table_name='D_FUNCIONARIO',
-        columns=["SK_FUNCIONARIO", "CD_FUNCIONARIO"]
+        schema='dw',
+        table_name='d_funcionario',
+        columns=["sk_funcionario", "cd_funcionario"]
     )
 
     return dim_funcionario
@@ -146,18 +146,18 @@ def extract_dim_data(conn):
     dim_data = (
         dwt.read_table(
             conn=conn,
-            schema='DW',
-            table_name='D_DATA',
-            columns=['SK_DATA', 'DT_REFERENCIA']).
+            schema='dw',
+            table_name='d_data',
+            columns=['sk_data', 'dt_referencia']).
             assign(
-            DT_REFERENCIA=lambda x:
+            dt_referencia=lambda x:
             pd.to_datetime(
-                x.DT_REFERENCIA,
+                x.dt_referencia,
                 format='%Y-%m-%d %H:%M:%S')).
             assign(
-            DT_REFERENCIA=lambda x: x.DT_REFERENCIA.astype(str)).
+            dt_referencia=lambda x: x.dt_referencia.astype(str)).
             assign(
-            DT_REFERENCIA=lambda x: x.DT_REFERENCIA.apply(
+            dt_referencia=lambda x: x.dt_referencia.apply(
                 lambda y: y[:13])
         )
     )
@@ -177,19 +177,19 @@ def extract_dim_produto(conn):
     dim_produto = (
         dwt.read_table(
             conn=conn,
-            schema='DW',
-            table_name='D_PRODUTO',
-            columns=["SK_PRODUTO", "CD_PRODUTO",
-                     "VL_PRECO_CUSTO", "VL_PERCENTUAL_LUCRO",
-                     "DT_INICIO", "DT_FIM", "FL_ATIVO"]).
-            assign(
-            DT_INICIO=lambda x:
+            schema='dw',
+            table_name='d_produto',
+            columns=["sk_produto", "cd_produto",
+                     "vl_preco_custo", "vl_percentual_lucro",
+                     "dt_inicio", "dt_fim", "fl_ativo"]).
+        assign(
+            dt_inicio=lambda x:
             pd.to_datetime(
-                x.DT_INICIO,
+                x.dt_inicio,
                 format='%Y-%m-%d %H:%M:%S'),
-            DT_FIM=lambda x:
+            dt_fim=lambda x:
             pd.to_datetime(
-                x.DT_FIM,
+                x.dt_fim,
                 format='%Y-%m-%d %H:%M:%S'))
     )
 
@@ -209,22 +209,22 @@ def extract_dim_loja(conn):
     dim_loja = (
         dwt.read_table(
             conn=conn,
-            schema='DW',
-            table_name='D_LOJA',
+            schema='dw',
+            table_name='d_loja',
             columns=[
-                "SK_LOJA",
-                "CD_LOJA",
-                "DT_INICIO",
-                "DT_FIM",
-                "FL_ATIVO"]).
-            assign(
-            DT_INICIO=lambda x:
+                "sk_loja",
+                "cd_loja",
+                "dt_inicio",
+                "dt_fim",
+                "fl_ativo"]).
+        assign(
+            dt_inicio=lambda x:
             pd.to_datetime(
-                x.DT_INICIO,
+                x.dt_inicio,
                 format='%Y-%m-%d %H:%M:%S'),
-            DT_FIM=lambda x:
+            dt_fim=lambda x:
             pd.to_datetime(
-                x.DT_FIM,
+                x.dt_fim,
                 format='%Y-%m-%d %H:%M:%S'))
 
     )
@@ -245,17 +245,17 @@ def extract_stage_venda(conn):
     stage_venda = (
         dwt.read_table(
             conn=conn,
-            schema='STAGE',
-            table_name='STG_VENDA',
+            schema='stage',
+            table_name='stg_venda',
             columns=['id_venda', 'id_pagamento', 'id_cliente',
                      'id_func', 'id_loja', 'nfc', 'data_venda']).
-            assign(
+        assign(
             data_venda=lambda x: pd.to_datetime(
                 x.data_venda,
                 format='%Y-%m-%d %H:%M:%S')).
-            assign(
+        assign(
             data_referencia=lambda x: x.data_venda.astype(str)).
-            assign(
+        assign(
             data_referencia=lambda x: x.data_referencia.apply(
                 lambda y: y[:13]),
             id_venda=lambda x: x.id_venda.astype('int64'),
@@ -268,23 +268,23 @@ def extract_stage_venda(conn):
     stage_item_venda = (
         dwt.read_table(
             conn=conn,
-            schema='STAGE',
-            table_name='STG_ITEM_VENDA',
+            schema='stage',
+            table_name='stg_item_venda',
             columns=[
                 'id_venda',
                 'id_produto',
-                'qtd_produto'
-            ]).
-            assign(
+                'qtd_produto']).
+        assign(
             id_venda=lambda x: x.id_venda.astype('int64')))
 
     stg_venda = (
         stage_venda.
-            pipe(pd.merge,
-                 right=stage_item_venda,
-                 left_on="id_venda",
-                 right_on="id_venda",
-                 suffixes=["_11", "_12"])
+        pipe(
+            pd.merge,
+            right=stage_item_venda,
+            left_on="id_venda",
+            right_on="id_venda",
+            suffixes=["_11", "_12"])
     )
 
     return stg_venda
@@ -319,8 +319,8 @@ def extract_new_values(conn):
                 stg.qtd_produto\
                 FROM stg_venda stg\
                 LEFT JOIN fact_venda fact\
-                ON fact.NU_NFC = stg.nfc\
-                WHERE fact.NU_NFC IS NULL;'
+                ON fact.nu_nfc = stg.nfc\
+                WHERE fact.nu_nfc IS NULL;'
               )
     )
 
@@ -334,70 +334,74 @@ def extract_new_values(conn):
 
         fact_merged_dimensions = (
             new_values.
-                pipe(dwt.merge_input,
-                     right=dim_data,
-                     left_on="data_referencia",
-                     right_on="DT_REFERENCIA",
-                     suff=['_16', '_17'],
-                     surrogate_key='SK_DATA').
-                pipe(dwt.merge_input,
-                     right=dim_forma_pagamento,
-                     left_on="id_pagamento",
-                     right_on="CD_FORMA_PAGAMENTO",
-                     suff=["_01", "_02"],
-                     surrogate_key="SK_FORMA_PAGAMENTO").
-                pipe(dwt.merge_input,
-                     right=dim_cliente,
-                     left_on="id_cliente",
-                     right_on="CD_CLIENTE",
-                     suff=["_03", "_04"],
-                     surrogate_key="SK_CLIENTE").
-                pipe(dwt.merge_input,
-                     right=dim_funcionario,
-                     left_on="id_func",
-                     right_on="CD_FUNCIONARIO",
-                     suff=["_05", "_06"],
-                     surrogate_key="SK_FUNCIONARIO")
+            pipe(
+                dwt.merge_input,
+                right=dim_data,
+                left_on="data_referencia",
+                right_on="dt_referencia",
+                suff=['_16', '_17'],
+                surrogate_key='sk_data').
+            pipe(
+                dwt.merge_input,
+                right=dim_forma_pagamento,
+                left_on="id_pagamento",
+                right_on="cd_forma_pagamento",
+                suff=["_01", "_02"],
+                surrogate_key="sk_forma_pagamento").
+            pipe(
+                dwt.merge_input,
+                right=dim_cliente,
+                left_on="id_cliente",
+                right_on="cd_cliente",
+                suff=["_03", "_04"],
+                surrogate_key="sk_cliente").
+            pipe(
+                dwt.merge_input,
+                right=dim_funcionario,
+                left_on="id_func",
+                right_on="cd_funcionario",
+                suff=["_05", "_06"],
+                surrogate_key="sk_funcionario")
         )
 
     merge_with_produto = (
         sqldf('\
             SELECT\
-            fmd.SK_FORMA_PAGAMENTO,\
-            fmd.SK_CLIENTE,\
-            fmd.SK_FUNCIONARIO,\
-            fmd.SK_DATA,\
+            fmd.sk_forma_pagamento,\
+            fmd.sk_cliente,\
+            fmd.sk_funcionario,\
+            fmd.sk_data,\
             fmd.data_venda,\
             fmd.qtd_produto,\
             fmd.nfc,\
             fmd.id_loja,\
-            p.SK_PRODUTO,\
-            p.VL_PRECO_CUSTO,\
-            p.VL_PERCENTUAL_LUCRO\
+            p.sk_produto,\
+            p.vl_preco_custo,\
+            p.vl_percentual_lucro\
             FROM fact_merged_dimensions fmd\
             LEFT JOIN dim_produto p\
-            ON fmd.id_produto = p.CD_PRODUTO\
-            WHERE p.CD_PRODUTO = fmd.id_produto AND p.FL_ATIVO = 1;'
+            ON fmd.id_produto = p.cd_produto\
+            WHERE p.cd_produto = fmd.id_produto AND p.fl_ativo = 1;'
               )
     )
 
     merge_with_loja = (
-        sqldf(f'SELECT\
-                mwp.SK_FORMA_PAGAMENTO,\
-                mwp.SK_CLIENTE,\
-                mwp.SK_FUNCIONARIO,\
-                mwp.SK_DATA,\
-                mwp.data_venda,\
-                mwp.qtd_produto,\
-                mwp.nfc,\
-                mwp.SK_PRODUTO,\
-                mwp.VL_PRECO_CUSTO,\
-                mwp.VL_PERCENTUAL_LUCRO,\
-                l.SK_LOJA\
-                FROM merge_with_produto mwp\
-                LEFT JOIN dim_loja l ON mwp.id_loja = l.CD_LOJA\
-                WHERE l.CD_LOJA = mwp.id_loja AND l.FL_ATIVO = 1;'
-              )
+        sqldf(f'\
+            SELECT\
+            mwp.sk_forma_pagamento,\
+            mwp.sk_cliente,\
+            mwp.sk_funcionario,\
+            mwp.sk_data,\
+            mwp.data_venda,\
+            mwp.qtd_produto,\
+            mwp.nfc,\
+            mwp.sk_produto,\
+            mwp.vl_preco_custo,\
+            mwp.vl_percentual_lucro,\
+            l.sk_loja\
+            FROM merge_with_produto mwp\
+            LEFT JOIN dim_loja l ON mwp.id_loja = l.cd_loja\
+            WHERE l.cd_loja = mwp.id_loja AND l.fl_ativo = 1;')
     )
 
     return merge_with_loja
@@ -423,72 +427,77 @@ def extract_new_venda(conn):
 
     stage_merged_dimensions = (
         stg_venda.
-            pipe(dwt.merge_input,
-                 right=dim_data,
-                 left_on="data_referencia",
-                 right_on="DT_REFERENCIA",
-                 suff=['_16', '_17'],
-                 surrogate_key='SK_DATA').
-            pipe(dwt.merge_input,
-                 right=dim_forma_pagamento,
-                 left_on="id_pagamento",
-                 right_on="CD_FORMA_PAGAMENTO",
-                 suff=["_01", "_02"],
-                 surrogate_key="SK_FORMA_PAGAMENTO").
-            pipe(dwt.merge_input,
-                 right=dim_cliente,
-                 left_on="id_cliente",
-                 right_on="CD_CLIENTE",
-                 suff=["_03", "_04"],
-                 surrogate_key="SK_CLIENTE").
-            pipe(dwt.merge_input,
-                 right=dim_funcionario,
-                 left_on="id_func",
-                 right_on="CD_FUNCIONARIO",
-                 suff=["_05", "_06"],
-                 surrogate_key="SK_FUNCIONARIO")
+        pipe(
+            dwt.merge_input,
+            right=dim_data,
+            left_on="data_referencia",
+            right_on="dt_referencia",
+            suff=['_16', '_17'],
+            surrogate_key='sk_data').
+        pipe(
+            dwt.merge_input,
+            right=dim_forma_pagamento,
+            left_on="id_pagamento",
+            right_on="cd_forma_pagamento",
+            suff=["_01", "_02"],
+            surrogate_key="sk_forma_pagamento").
+        pipe(
+            dwt.merge_input,
+            right=dim_cliente,
+            left_on="id_cliente",
+            right_on="cd_cliente",
+            suff=["_03", "_04"],
+            surrogate_key="sk_cliente").
+        pipe(
+            dwt.merge_input,
+            right=dim_funcionario,
+            left_on="id_func",
+            right_on="cd_funcionario",
+            suff=["_05", "_06"],
+            surrogate_key="sk_funcionario")
+
     )
 
     merge_with_produto = (
         sqldf('\
                 SELECT\
-                smd.SK_FORMA_PAGAMENTO,\
-                smd.SK_CLIENTE,\
-                smd.SK_FUNCIONARIO,\
-                smd.SK_DATA,\
+                smd.sk_forma_pagamento,\
+                smd.sk_cliente,\
+                smd.sk_funcionario,\
+                smd.sk_data,\
                 smd.data_venda,\
                 smd.qtd_produto,\
                 smd.nfc,\
                 smd.id_loja,\
-                p.SK_PRODUTO,\
-                p.VL_PRECO_CUSTO,\
-                p.VL_PERCENTUAL_LUCRO\
+                p.sk_produto,\
+                p.vl_preco_custo,\
+                p.vl_percentual_lucro\
                 FROM stage_merged_dimensions smd\
                 INNER JOIN dim_produto p\
-                ON smd.id_produto = p.CD_PRODUTO\
-                WHERE (p.DT_INICIO <= smd.data_venda < p.DT_FIM)\
-                OR (p.DT_INICIO <= smd.data_venda AND p.DT_FIM IS NULL);')
+                ON smd.id_produto = p.cd_produto\
+                WHERE (p.dt_inicio <= smd.data_venda < p.dt_fim)\
+                OR (p.dt_inicio <= smd.data_venda AND p.dt_fim IS NULL);')
     )
 
     merge_with_loja = (
         sqldf('\
                 SELECT\
-                mwp.SK_FORMA_PAGAMENTO,\
-                mwp.SK_CLIENTE,\
-                mwp.SK_FUNCIONARIO,\
-                mwp.SK_DATA,\
+                mwp.sk_forma_pagamento,\
+                mwp.sk_cliente,\
+                mwp.sk_funcionario,\
+                mwp.sk_data,\
                 mwp.data_venda,\
                 mwp.qtd_produto,\
                 mwp.nfc,\
-                mwp.SK_PRODUTO,\
-                mwp.VL_PRECO_CUSTO,\
-                mwp.VL_PERCENTUAL_LUCRO,\
-                l.SK_LOJA\
+                mwp.sk_produto,\
+                mwp.vl_preco_custo,\
+                mwp.vl_percentual_lucro,\
+                l.sk_loja\
                 FROM merge_with_produto mwp\
                 INNER JOIN dim_loja l\
-                ON mwp.id_loja = l.CD_LOJA\
-                WHERE (l.DT_INICIO <= mwp.data_venda < l.DT_FIM)\
-                OR (l.DT_INICIO <= mwp.data_venda AND l.DT_FIM IS NULL);')
+                ON mwp.id_loja = l.cd_loja\
+                WHERE (l.dt_inicio <= mwp.data_venda < l.dt_fim)\
+                OR (l.dt_inicio <= mwp.data_venda AND l.dt_fim IS NULL);')
     )
 
     return merge_with_loja
@@ -505,28 +514,27 @@ def treat_fact_venda(stg_venda):
     fact_venda -- pandas.Dataframe;
     """
     columns_names = {
-        "nfc": "NU_NFC",
-        "qtd_produto": "QTD_PRODUTO",
-        "SK_DATA": "SK_DT_VENDA"
+        "nfc": "nu_nfc",
+        "sk_data": "sk_dt_venda"
     }
 
     columns_select = [
-        "SK_FORMA_PAGAMENTO",
-        "SK_CLIENTE",
-        "SK_FUNCIONARIO",
-        "SK_LOJA",
-        "SK_DT_VENDA",
-        "SK_PRODUTO",
-        "NU_NFC",
-        "QTD_PRODUTO",
-        "VL_PRECO_CUSTO",
-        "VL_PERCENTUAL_LUCRO"
+        'sk_forma_pagamento',
+        'sk_cliente',
+        'sk_funcionario',
+        'sk_loja',
+        'sk_produto',
+        'sk_dt_venda',
+        'nu_nfc',
+        'qtd_produto',
+        'vl_preco_custo',
+        'vl_percentual_lucro'
     ]
 
     fact_venda = (
         stg_venda.
-            rename(columns=columns_names).
-            filter(columns_select)
+        rename(columns=columns_names).
+        filter(columns_select)
     )
 
     return fact_venda
@@ -563,24 +571,23 @@ def load_fact_venda(fact_venda, conn, action):
     action -- if_exists (append, replace...)
     """
     data_type = {
-        "SK_FORMA_PAGAMENTO": Integer(),
-        "SK_CLIENTE": Integer(),
-        "SK_FUNCIONARIO": Integer(),
-        "SK_LOJA": Integer(),
-        "SK_DT_VENDA": Integer(),
-        "SK_PRODUTO": Integer(),
-        "NU_NFC": String(),
-        "QTD_PRODUTO": Integer(),
-        "VL_PRECO_CUSTO": Float(),
-        "VL_PERCENTUAL_LUCRO": Float()
+        "sk_forma_pagamento": Integer(),
+        "sk_cliente": Integer(),
+        "sk_funcionario": Integer(),
+        "sk_loja": Integer(),
+        "sk_dt_venda": Integer(),
+        "sk_produto": Integer(),
+        "nu_nfc": String(),
+        "qtd_produto": Integer(),
+        "vl_preco_custo": Float(),
+        "vl_percentual_lucro": Float()
     }
-
     (
         fact_venda.
-            to_sql(
+        to_sql(
             con=conn,
-            name='F_VENDA',
-            schema="DW",
+            name='f_venda',
+            schema="dw",
             if_exists=action,
             chunksize=100,
             index=False,
@@ -600,15 +607,15 @@ def run_fact_venda(conn):
     if fact_venda is None:
         (
             extract_new_venda(conn).
-                pipe(treat_fact_venda).
-                pipe(treat_missing_data).
-                pipe(load_fact_venda, conn=conn, action='replace')
+            pipe(treat_fact_venda).
+            pipe(treat_missing_data).
+            pipe(load_fact_venda, conn=conn, action='replace')
         )
     else:
         (
             extract_new_values(conn).
-                pipe(treat_fact_venda).
-                pipe(load_fact_venda, conn=conn, action='append')
+            pipe(treat_fact_venda).
+            pipe(load_fact_venda, conn=conn, action='append')
         )
 
 

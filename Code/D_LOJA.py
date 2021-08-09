@@ -19,8 +19,8 @@ def extract_stage_loja(conn):
     """
     stg_loja = dwt.read_table(
         conn=conn,
-        schema='STAGE',
-        table_name='STG_LOJA',
+        schema='stage',
+        table_name='stg_loja',
         columns=[
             'id_loja',
             'nome_loja',
@@ -33,8 +33,8 @@ def extract_stage_loja(conn):
 
     stg_endereco = dwt.read_table(
         conn=conn,
-        schema='STAGE',
-        table_name='STG_ENDERECO',
+        schema='stage',
+        table_name='stg_endereco',
         columns=[
             'id_endereco',
             'estado',
@@ -71,26 +71,24 @@ def extract_dim_loja(conn):
     try:
         dim_loja = dwt.read_table(
             conn=conn,
-            schema='DW',
-            table_name='D_LOJA',
+            schema='dw',
+            table_name='d_loja',
             columns=[
-                'SK_LOJA',
-                'CD_LOJA',
-                'NO_LOJA',
-                'DS_RAZAO_SOCIAL',
-                'NU_CNPJ',
-                'NU_TELEFONE',
-                'CD_ENDERECO_LOJA',
-                'NO_ESTADO',
-                'NO_CIDADE',
-                'NO_BAIRRO',
-                'DS_RUA',
-                'FL_ATIVO',
-                'DT_INICIO',
-                'DT_FIM'
-
-            ],
-            where='"SK_LOJA" > 0'
+                'sk_loja',
+                'cd_loja',
+                'no_loja',
+                'ds_razao_social',
+                'nu_cnpj',
+                'nu_telefone',
+                'cd_endereco_loja',
+                'no_estado',
+                'no_cidade',
+                'no_bairro',
+                'ds_rua',
+                'fl_ativo',
+                'dt_inicio',
+                'dt_fim'],
+            where='"sk_loja" > 0'
         )
 
         return dim_loja
@@ -109,16 +107,16 @@ def treat_dim_loja(stg_loja_endereco):
     dim_loja -- pandas.Dataframe;
     """
     columns_names = {
-        "id_loja": "CD_LOJA",
-        "nome_loja": "NO_LOJA",
-        "razao_social": "DS_RAZAO_SOCIAL",
-        "cnpj": "NU_CNPJ",
-        "telefone": "NU_TELEFONE",
-        "id_endereco": "CD_ENDERECO_LOJA",
-        "estado": "NO_ESTADO",
-        "cidade": "NO_CIDADE",
-        "bairro": "NO_BAIRRO",
-        "rua": "DS_RUA"
+        "id_loja": "cd_loja",
+        "nome_loja": "no_loja",
+        "razao_social": "ds_razao_social",
+        "cnpj": "nu_cnpj",
+        "telefone": "nu_telefone",
+        "id_endereco": "cd_endereco_loja",
+        "estado": "no_estado",
+        "cidade": "no_cidade",
+        "bairro": "no_bairro",
+        "rua": "ds_rua"
     }
 
     select_columns = [
@@ -135,22 +133,26 @@ def treat_dim_loja(stg_loja_endereco):
     ]
     dim_loja = (
         stg_loja_endereco.
-            filter(select_columns).
-            rename(columns=columns_names).
-            assign(
-                CD_LOJA=lambda x: x.CD_LOJA.astype("int64"),
-                FL_ATIVO=lambda x: 1,
-                DT_INICIO=lambda x: dt.date(1900, 1, 1),
-                DT_FIM=None)
+        filter(select_columns).
+        rename(columns=columns_names).
+        assign(
+            cd_loja=lambda x: x.cd_loja.astype("int64"),
+            fl_ativo=lambda x: 1,
+            dt_inicio=lambda x: dt.date(1900, 1, 1),
+            dt_fim=None
+        )
     )
 
-    dim_loja.insert(0, 'SK_LOJA', range(1, 1 + len(dim_loja)))
+    dim_loja.insert(0, 'sk_loja', range(1, 1 + len(dim_loja)))
 
     dim_loja = (
         pd.DataFrame([
-            [-1, -1, "Não informado", "Não informado", "Não informado", "Não informado", -1,"Não informado", "Não informado", "Não informado", "Não informado", -1, None, None],
-            [-2, -2, "Não aplicável", "Não aplicável", "Não aplicável", "Não aplicável", -2, "Não aplicável", "Não aplicável", "Não aplicável", "Não aplicável", -2, None, None],
-            [-3, -3, "Desconhecido", "Desconhecido", "Desconhecido", "Desconhecido", -3, "Desconhecido", "Desconhecido", "Desconhecido", "Desconhecido", -3, None, None]
+            [-1, -1, "Não informado", "Não informado", "Não informado", "Não informado", -1, "Não informado",
+             "Não informado", "Não informado", "Não informado", -1, None, None],
+            [-2, -2, "Não aplicável", "Não aplicável", "Não aplicável", "Não aplicável", -2, "Não aplicável",
+             "Não aplicável", "Não aplicável", "Não aplicável", -2, None, None],
+            [-3, -3, "Desconhecido", "Desconhecido", "Desconhecido", "Desconhecido", -3, "Desconhecido", "Desconhecido",
+             "Desconhecido", "Desconhecido", -3, None, None]
         ], columns=dim_loja.columns).append(dim_loja)
     )
 
@@ -175,44 +177,47 @@ def extract_new_records(conn):
 
     # fazendo a diferença da stage com o dw, para saber os dados que atualizaram
     new_records = (
-        sqldf("SELECT df_stage.*\
-                    FROM df_stage\
-                    LEFT JOIN df_dw \
-                    ON df_stage.id_loja = df_dw.CD_LOJA\
-                    WHERE df_dw.CD_LOJA IS NULL").
+        sqldf("\
+            SELECT df_stage.*\
+            FROM df_stage\
+            LEFT JOIN df_dw \
+            ON df_stage.id_loja = df_dw.cd_loja\
+            WHERE df_dw.cd_loja IS NULL").
         assign(
             fl_tipo_update=1
         )
     )
 
     new_updates = (
-        sqldf(f"SELECT stg.* \
-                    FROM df_stage stg \
-                    INNER JOIN df_dw dw \
-                    ON stg.id_loja = dw.CD_LOJA \
-                    WHERE \
-                    stg.estado != dw.NO_ESTADO\
-                    OR stg.cidade != dw.NO_CIDADE\
-                    OR stg.bairro != dw.NO_BAIRRO \
-                    OR stg.rua != dw.DS_RUA").
+        sqldf("\
+            SELECT stg.*\
+            FROM df_stage stg\
+            INNER JOIN df_dw dw\
+            ON stg.id_loja = dw.cd_loja\
+            WHERE\
+            stg.estado != dw.no_estado\
+            OR stg.cidade != dw.no_cidade\
+            OR stg.bairro != dw.no_bairro\
+            OR stg.rua != dw.ds_rua").
         assign(
             fl_tipo_update=2
         )
     )
 
     new_names = (
-        sqldf(f"SELECT stg.* \
-                        FROM df_stage stg \
-                        INNER JOIN df_dw dw \
-                        ON stg.id_loja = dw.CD_LOJA \
-                        WHERE stg.nome_loja != dw.NO_LOJA").
+        sqldf("\
+            SELECT stg.* \
+            FROM df_stage stg \
+            INNER JOIN df_dw dw \
+            ON stg.id_loja = dw.cd_loja \
+            WHERE stg.nome_loja != dw.no_loja").
         assign(
             fl_tipo_update=3
         )
     )
     new_values = (
         pd.concat([new_records, new_updates, new_names]).assign(
-            df_size=df_dw['SK_LOJA'].max() + 1
+            df_size=df_dw['sk_loja'].max() + 1
         )
     )
     return new_values
@@ -229,61 +234,64 @@ def treat_updated_loja(new_values, conn):
     insert_records ou updated_values -- pandas.Dataframe;
     """
     select_columns = [
-        "CD_LOJA",
-        "NO_LOJA",
-        "DS_RAZAO_SOCIAL",
-        "NU_CNPJ",
-        "NU_TELEFONE",
-        "CD_ENDERECO_LOJA",
-        "NO_ESTADO",
-        "NO_CIDADE",
-        "NO_BAIRRO",
-        "DS_RUA"
+        'cd_loja',
+        'no_loja',
+        'ds_razao_social',
+        'nu_cnpj',
+        'nu_telefone',
+        'cd_endereco_loja',
+        'no_estado',
+        'no_cidade',
+        'no_bairro',
+        'ds_rua',
     ]
 
     columns_names = {
-        "id_loja": "CD_LOJA",
-        "nome_loja": "NO_LOJA",
-        "razao_social": "DS_RAZAO_SOCIAL",
-        "cnpj": "NU_CNPJ",
-        "telefone": "NU_TELEFONE",
-        "id_endereco": "CD_ENDERECO_LOJA",
-        "estado": "NO_ESTADO",
-        "cidade": "NO_CIDADE",
-        "bairro": "NO_BAIRRO",
-        "rua": "DS_RUA"
+        "id_loja": "cd_loja",
+        "nome_loja": "no_loja",
+        "razao_social": "ds_razao_social",
+        "cnpj": "nu_cnpj",
+        "telefone": "nu_telefone",
+        "id_endereco": "cd_endereco_loja",
+        "estado": "no_estado",
+        "cidade": "no_cidade",
+        "bairro": "no_bairro",
+        "rua": "ds_rua"
     }
+
     size = new_values['df_size'].max()
 
     new_names = new_values.query('fl_tipo_update == 3')
     if len(new_names) > 0:
         for cd in new_names['id_loja']:
             nome = new_values.query(f"id_loja == {cd}")["id_loja"].item()
-            sql = f'UPDATE "DW"."D_LOJA"\
-                           SET "NO_LOJA" = \'{str(nome)}\'\
-                           WHERE "CD_LOJA" = {cd} AND "FL_ATIVO" = 1;'
+            sql = (f'\
+                UPDATE "dw"."d_loja"\
+                SET "no_loja" = \'{str(nome)}\'\
+                WHERE "cd_loja" = {cd} AND "fl_ativo" = 1;')
             conn.execute(sql)
-
 
     # extraindo as linhas que foram alteradas e padronizando os dados
     trated_values = (
         new_values.
-            query('fl_tipo_update != 3').
-            rename(columns=columns_names).
-            filter(items=select_columns).
-            assign(
-                DT_INICIO=lambda x: pd.to_datetime("today"),
-                DT_FIM=None,
-                FL_ATIVO=lambda x: 1)
+        query('fl_tipo_update != 3').
+        rename(columns=columns_names).
+        filter(items=select_columns).
+        assign(
+            dt_inicio=lambda x: pd.to_datetime("today"),
+            dt_fim=None,
+            fl_ativo=lambda x: 1)
     )
-    trated_values.insert(0, 'SK_LOJA', range(size, size + len(new_values)))
+    trated_values.insert(0, 'sk_loja', range(size, size + len(new_values)))
 
     # atualizando a flag e data_fim dos dados atualizados
-    for cd in trated_values['CD_LOJA']:
-        sql = f'UPDATE "DW"."D_LOJA"\
-            SET "FL_ATIVO" = {0},\
-            "DT_FIM" = \'{pd.to_datetime("today")}\'\
-            WHERE "CD_LOJA" = {cd} AND "FL_ATIVO" = 1;'
+
+    for cd in trated_values['cd_loja']:
+        sql = (f'\
+            UPDATE "dw"."d_loja"\
+            SET "fl_ativo" = {0},\
+            "dt_fim" = \'{pd.to_datetime("today")}\'\
+            WHERE "cd_loja" = {cd} AND "fl_ativo" = 1;')
         conn.execute(sql)
 
     return trated_values
@@ -299,28 +307,28 @@ def load_dim_loja(dim_loja, conn, action):
     action -- if_exists (append, replace...)
     """
     data_types = {
-        "SK_LOJA": Integer(),
-        "CD_LOJA": Integer(),
-        "NO_LOJA": String(),
-        "DS_RAZAO_SOCIAL": String(),
-        "NU_CNPJ": String(),
-        "NU_TELEFONE": String(),
-        "CD_ENDERECO_LOJA":Integer(),
-        "NO_ESTADO": String(),
-        "NO_CIDADE": String(),
-        "NO_BAIRRO": String,
-        "DS_RUA": String(),
-        "FL_ATIVO": Integer(),
-        "DT_INICIO": DateTime(),
-        "DT_FIM": DateTime()
+        "sk_loja": Integer(),
+        "cd_loja": Integer(),
+        "no_loja": String(),
+        "ds_razao_social": String(),
+        "nu_cnpj": String(),
+        "nu_telefone": String(),
+        "cd_endereco_loja": Integer(),
+        "no_estado": String(),
+        "no_cidade": String(),
+        "no_bairro": String,
+        "ds_rua": String(),
+        "fl_ativo": Integer(),
+        "dt_inicio": DateTime(),
+        "dt_fim": DateTime()
     }
     (
         dim_loja.
-            astype('string').
-            to_sql(
+        astype('string').
+        to_sql(
             con=conn,
-            name='D_LOJA',
-            schema='DW',
+            name='d_loja',
+            schema='dw',
             if_exists=action,
             index=False,
             chunksize=100,
@@ -339,16 +347,15 @@ def run_dim_loja(conn):
     dim_loja = extract_dim_loja(conn)
     if dim_loja is None:
         (
-
             extract_stage_loja(conn=conn).
-                pipe(treat_dim_loja).
-                pipe(load_dim_loja, conn=conn, action='replace')
+            pipe(treat_dim_loja).
+            pipe(load_dim_loja, conn=conn, action='replace')
         )
     else:
         (
             extract_new_records(conn).
-                pipe(treat_updated_loja, conn=conn).
-                pipe(load_dim_loja, conn=conn, action='append')
+            pipe(treat_updated_loja, conn=conn).
+            pipe(load_dim_loja, conn=conn, action='append')
 
         )
 

@@ -178,11 +178,21 @@ def extract_new_records(conn):
     # fazendo a diferença da stage com o dw, para saber os dados que atualizaram
     new_records = (
         sqldf("\
-            SELECT df_stage.*\
-            FROM df_stage\
-            LEFT JOIN df_dw \
-            ON df_stage.id_loja = df_dw.cd_loja\
-            WHERE df_dw.cd_loja IS NULL").
+            SELECT \
+            stg.id_loja, \
+            stg.nome_loja, \
+            stg.razao_social, \
+            stg.cnpj, \
+            stg.telefone, \
+            stg.id_endereco, \
+            stg.estado, \
+            stg.cidade, \
+            stg.bairro, \
+            stg.rua \
+            FROM df_stage stg\
+            LEFT JOIN df_dw dw \
+            ON stg.id_loja = dw.cd_loja \
+            WHERE dw.cd_loja IS NULL").
         assign(
             fl_tipo_update=1
         )
@@ -190,14 +200,24 @@ def extract_new_records(conn):
 
     new_updates = (
         sqldf("\
-            SELECT stg.*\
-            FROM df_stage stg\
-            INNER JOIN df_dw dw\
-            ON stg.id_loja = dw.cd_loja\
-            WHERE\
-            stg.estado != dw.no_estado\
-            OR stg.cidade != dw.no_cidade\
-            OR stg.bairro != dw.no_bairro\
+            SELECT \
+            stg.id_loja, \
+            stg.nome_loja, \
+            stg.razao_social, \
+            stg.cnpj, \
+            stg.telefone, \
+            stg.id_endereco, \
+            stg.estado, \
+            stg.cidade, \
+            stg.bairro, \
+            stg.rua \
+            FROM df_stage stg \
+            INNER JOIN df_dw dw \
+            ON stg.id_loja = dw.cd_loja \
+            WHERE \
+            stg.estado != dw.no_estado \
+            OR stg.cidade != dw.no_cidade \
+            OR stg.bairro != dw.no_bairro \
             OR stg.rua != dw.ds_rua").
         assign(
             fl_tipo_update=2
@@ -206,7 +226,17 @@ def extract_new_records(conn):
 
     new_names = (
         sqldf("\
-            SELECT stg.* \
+            SELECT \
+            stg.id_loja, \
+            stg.nome_loja, \
+            stg.razao_social, \
+            stg.cnpj, \
+            stg.telefone, \
+            stg.id_endereco, \
+            stg.estado, \
+            stg.cidade, \
+            stg.bairro, \
+            stg.rua \
             FROM df_stage stg \
             INNER JOIN df_dw dw \
             ON stg.id_loja = dw.cd_loja \
@@ -220,10 +250,11 @@ def extract_new_records(conn):
             df_size=df_dw['sk_loja'].max() + 1
         )
     )
+
     return new_values
 
 
-def treat_updated_loja(new_values, conn):
+def treat_updated_loja(new_values):
     """
     Faz o tratamento dos fluxos de execução da SCD loja
 
@@ -261,16 +292,6 @@ def treat_updated_loja(new_values, conn):
 
     size = new_values['df_size'].max()
 
-    new_names = new_values.query('fl_tipo_update == 3')
-    if len(new_names) > 0:
-        for cd in new_names['id_loja']:
-            nome = new_values.query(f"id_loja == {cd}")["id_loja"].item()
-            sql = (f'\
-                UPDATE "dw"."d_loja"\
-                SET "no_loja" = \'{str(nome)}\'\
-                WHERE "cd_loja" = {cd} AND "fl_ativo" = 1;')
-            conn.execute(sql)
-
     # extraindo as linhas que foram alteradas e padronizando os dados
     trated_values = (
         new_values.
@@ -283,16 +304,6 @@ def treat_updated_loja(new_values, conn):
             fl_ativo=lambda x: 1)
     )
     trated_values.insert(0, 'sk_loja', range(size, size + len(new_values)))
-
-    # atualizando a flag e data_fim dos dados atualizados
-
-    for cd in trated_values['cd_loja']:
-        sql = (f'\
-            UPDATE "dw"."d_loja"\
-            SET "fl_ativo" = {0},\
-            "dt_fim" = \'{pd.to_datetime("today")}\'\
-            WHERE "cd_loja" = {cd} AND "fl_ativo" = 1;')
-        conn.execute(sql)
 
     return trated_values
 
@@ -336,6 +347,32 @@ def load_dim_loja(dim_loja, conn, action):
         )
     )
 
+    return dim_loja
+
+
+def update_new_values(dim_loja, conn):
+    new_names = dim_loja.query('fl_tipo_update == 3')
+    if len(new_names) > 0:
+        for cd in new_names['id_loja']:
+            nome = dim_loja.query(f"id_loja == {cd}")["id_loja"].item()
+            sql = (f'\
+                    UPDATE "dw"."d_loja"\
+                    SET "no_loja" = \'{str(nome)}\'\
+                    WHERE "cd_loja" = {cd} AND "fl_ativo" = 1;')
+            conn.execute(sql)
+
+    new_values = dim_loja.query('fl_tipo_update == 2')
+    if len(new_values) > 0:
+        for cd in new_values['cd_loja']:
+            sql = (f'\
+                UPDATE "dw"."d_loja"\
+                SET "fl_ativo" = {0},\
+                "dt_fim" = \'{pd.to_datetime("today")}\'\
+                WHERE "cd_loja" = {cd} AND "fl_ativo" = 1;')
+            conn.execute(sql)
+
+    return dim_loja
+
 
 def run_dim_loja(conn):
     """
@@ -354,7 +391,8 @@ def run_dim_loja(conn):
     else:
         (
             extract_new_records(conn).
-            pipe(treat_updated_loja, conn=conn).
+            pipe(update_new_values, conn=conn).
+            pipe(treat_updated_loja).
             pipe(load_dim_loja, conn=conn, action='append')
 
         )

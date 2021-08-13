@@ -1,13 +1,15 @@
+import datetime
 import pandas as pd
-import datetime as dt
 import time as t
+import sqlalchemy as sqla
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.types import DateTime, String, Integer
 from pandasql import sqldf
-import DW_TOOLS as dwt
-from CONEXAO import create_connection_postgre
+import Code.DW_TOOLS as dwt
+from Code.CONEXAO import create_connection_postgre
 
 
-def extract_stage_loja(conn):
+def extract_dim_loja(conn):
     """
     Extrai todas as tabelas necessárias para gerar a dimensão loja
 
@@ -55,53 +57,46 @@ def extract_stage_loja(conn):
         )
     )
 
+    if dwt.verify_table_exists(conn=conn, schema='dw', table='d_loja'):
+        query = """
+            SELECT 
+                stg.id_loja, stg.nome_loja, stg.razao_social, 
+                stg.cnpj, stg.telefone, stg.id_endereco, 
+                stg.estado, stg.cidade, stg.bairro, stg.rua,
+                    CASE 
+                        WHEN dim.cd_loja IS NULL
+                        THEN 'insert'
+                        WHEN dim.cd_endereco_loja != stg.id_endereco
+                            OR dim.ds_razao_social != stg.razao_social
+                            OR dim.nu_cnpj != stg.cnpj
+                        THEN 'insert_update'
+                            WHEN dim.no_loja != stg.nome_loja
+                        THEN 'only_update'
+                        ELSE 'none' 
+                    END AS fl_insert_update
+            FROM stg_loja stg
+            LEFT JOIN dw.d_loja dim 
+            ON stg.id_loja = dim.cd_loja
+            WHERE dim.fl_ativo = 1
+        """
+        stg_loja_endereco = sqldf(query, {'stg_loja': stg_loja_endereco}, conn.url)
+    else:
+        stg_loja_endereco = (
+            stg_loja_endereco.assign(
+                fl_insert_update='insert'
+            )
+        )
+
     return stg_loja_endereco
 
 
-def extract_dim_loja(conn):
-    """
-    Extrai os dados da dimensão loja
-
-    parâmetros:
-    conn -- conexão criada via SqlAlchemy com o servidor DW;
-
-    return:
-    dim_loja -- pandas.Dataframe;
-    """
-    try:
-        dim_loja = dwt.read_table(
-            conn=conn,
-            schema='dw',
-            table_name='d_loja',
-            columns=[
-                'sk_loja',
-                'cd_loja',
-                'no_loja',
-                'ds_razao_social',
-                'nu_cnpj',
-                'nu_telefone',
-                'cd_endereco_loja',
-                'no_estado',
-                'no_cidade',
-                'no_bairro',
-                'ds_rua',
-                'fl_ativo',
-                'dt_inicio',
-                'dt_fim'],
-            where='"sk_loja" > 0'
-        )
-
-        return dim_loja
-    except:
-        return None
-
-
-def treat_dim_loja(stg_loja_endereco):
+def treat_dim_loja(stg_loja_endereco, conn):
     """
     Faz o tratamento dos dados extraidos das stages
 
     parâmetros:
     stg_loja_endereco -- pandas.Dataframe;
+    conn -- conexão criada via SqlAlchemy com o servidor do DW;
 
     return:
     dim_loja -- pandas.Dataframe;
@@ -129,8 +124,10 @@ def treat_dim_loja(stg_loja_endereco):
         "estado",
         "cidade",
         "bairro",
-        "rua"
+        "rua",
+        "fl_insert_update"
     ]
+
     dim_loja = (
         stg_loja_endereco.
         filter(select_columns).
@@ -138,174 +135,35 @@ def treat_dim_loja(stg_loja_endereco):
         assign(
             cd_loja=lambda x: x.cd_loja.astype("int64"),
             fl_ativo=lambda x: 1,
-            dt_inicio=lambda x: dt.date(1900, 1, 1),
+            dt_inicio=pd.to_datetime("today", format='%Y-%m-%d'),
             dt_fim=None
         )
     )
 
-    dim_loja.insert(0, 'sk_loja', range(1, 1 + len(dim_loja)))
+    if dwt.verify_table_exists(conn=conn, schema='dw', table='d_loja'):
+        size = dwt.find_max_sk(conn=conn, schema='dw', table='d_loja')
 
-    dim_loja = (
-        pd.DataFrame([
-            [-1, -1, "Não informado", "Não informado", "Não informado", "Não informado", -1, "Não informado",
-             "Não informado", "Não informado", "Não informado", -1, None, None],
-            [-2, -2, "Não aplicável", "Não aplicável", "Não aplicável", "Não aplicável", -2, "Não aplicável",
-             "Não aplicável", "Não aplicável", "Não aplicável", -2, None, None],
-            [-3, -3, "Desconhecido", "Desconhecido", "Desconhecido", "Desconhecido", -3, "Desconhecido", "Desconhecido",
-             "Desconhecido", "Desconhecido", -3, None, None]
-        ], columns=dim_loja.columns).append(dim_loja)
-    )
+        dim_loja.insert(0, 'sk_loja', range(size, size + len(dim_loja)))
+
+    else:
+        defaut_date = pd.to_datetime("1900-01-01", format='%Y-%m-%d')
+
+        dim_loja.insert(0, 'sk_loja', range(1, 1 + len(dim_loja)))
+
+        del dim_loja['fl_insert_update']
+
+        dim_loja = (
+            pd.DataFrame([
+                [-1, -1, "Não informado", "Não informado", "Não informado", "Não informado", -1, "Não informado",
+                 "Não informado", "Não informado", "Não informado", -1, defaut_date, None],
+                [-2, -2, "Não aplicável", "Não aplicável", "Não aplicável", "Não aplicável", -2, "Não aplicável",
+                 "Não aplicável", "Não aplicável", "Não aplicável", -2, defaut_date, None],
+                [-3, -3, "Desconhecido", "Desconhecido", "Desconhecido", "Desconhecido", -3, "Desconhecido",
+                 "Desconhecido", "Desconhecido", "Desconhecido", -3, defaut_date, None]
+            ], columns=dim_loja.columns).append(dim_loja)
+        )
 
     return dim_loja
-
-
-def extract_new_records(conn):
-    """
-    Extrai novos registros e registros atualizados na stage
-
-    parâmetros:
-    conn -- conexão criada via SqlAlchemy com o servidor DW;
-
-    return:
-    new_values: dataframe com as atualizações
-    """
-    # extraindo os dados da stage
-    df_stage = extract_stage_loja(conn)
-
-    # extraindo os dados do dw
-    df_dw = extract_dim_loja(conn)
-
-    # fazendo a diferença da stage com o dw, para saber os dados que atualizaram
-    new_records = (
-        sqldf("\
-            SELECT \
-            stg.id_loja, \
-            stg.nome_loja, \
-            stg.razao_social, \
-            stg.cnpj, \
-            stg.telefone, \
-            stg.id_endereco, \
-            stg.estado, \
-            stg.cidade, \
-            stg.bairro, \
-            stg.rua \
-            FROM df_stage stg\
-            LEFT JOIN df_dw dw \
-            ON stg.id_loja = dw.cd_loja \
-            WHERE dw.cd_loja IS NULL").
-        assign(
-            fl_tipo_update=1
-        )
-    )
-
-    new_updates = (
-        sqldf("\
-            SELECT \
-            stg.id_loja, \
-            stg.nome_loja, \
-            stg.razao_social, \
-            stg.cnpj, \
-            stg.telefone, \
-            stg.id_endereco, \
-            stg.estado, \
-            stg.cidade, \
-            stg.bairro, \
-            stg.rua \
-            FROM df_stage stg \
-            INNER JOIN df_dw dw \
-            ON stg.id_loja = dw.cd_loja \
-            WHERE \
-            stg.estado != dw.no_estado \
-            OR stg.cidade != dw.no_cidade \
-            OR stg.bairro != dw.no_bairro \
-            OR stg.rua != dw.ds_rua").
-        assign(
-            fl_tipo_update=2
-        )
-    )
-
-    new_names = (
-        sqldf("\
-            SELECT \
-            stg.id_loja, \
-            stg.nome_loja, \
-            stg.razao_social, \
-            stg.cnpj, \
-            stg.telefone, \
-            stg.id_endereco, \
-            stg.estado, \
-            stg.cidade, \
-            stg.bairro, \
-            stg.rua \
-            FROM df_stage stg \
-            INNER JOIN df_dw dw \
-            ON stg.id_loja = dw.cd_loja \
-            WHERE stg.nome_loja != dw.no_loja").
-        assign(
-            fl_tipo_update=3
-        )
-    )
-    new_values = (
-        pd.concat([new_records, new_updates, new_names]).assign(
-            df_size=df_dw['sk_loja'].max() + 1
-        )
-    )
-
-    return new_values
-
-
-def treat_updated_loja(new_values):
-    """
-    Faz o tratamento dos fluxos de execução da SCD loja
-
-    parâmetros:
-    conn -- conexão criada via SqlAlchemy com o servidor DW;
-
-    return:
-    insert_records ou updated_values -- pandas.Dataframe;
-    """
-    select_columns = [
-        'cd_loja',
-        'no_loja',
-        'ds_razao_social',
-        'nu_cnpj',
-        'nu_telefone',
-        'cd_endereco_loja',
-        'no_estado',
-        'no_cidade',
-        'no_bairro',
-        'ds_rua',
-    ]
-
-    columns_names = {
-        "id_loja": "cd_loja",
-        "nome_loja": "no_loja",
-        "razao_social": "ds_razao_social",
-        "cnpj": "nu_cnpj",
-        "telefone": "nu_telefone",
-        "id_endereco": "cd_endereco_loja",
-        "estado": "no_estado",
-        "cidade": "no_cidade",
-        "bairro": "no_bairro",
-        "rua": "ds_rua"
-    }
-
-    size = new_values['df_size'].max()
-
-    # extraindo as linhas que foram alteradas e padronizando os dados
-    trated_values = (
-        new_values.
-        query('fl_tipo_update != 3').
-        rename(columns=columns_names).
-        filter(items=select_columns).
-        assign(
-            dt_inicio=lambda x: pd.to_datetime("today"),
-            dt_fim=None,
-            fl_ativo=lambda x: 1)
-    )
-    trated_values.insert(0, 'sk_loja', range(size, size + len(new_values)))
-
-    return trated_values
 
 
 def load_dim_loja(dim_loja, conn, action):
@@ -333,6 +191,20 @@ def load_dim_loja(dim_loja, conn, action):
         "dt_inicio": DateTime(),
         "dt_fim": DateTime()
     }
+
+    if dwt.verify_table_exists(conn=conn, schema='dw', table='d_loja'):
+        name_updates = dim_loja.query('fl_insert_update == "only_update"')
+        if name_updates.shape[0] != 0:
+            update_values(name_updates, conn)
+
+        insert_updates = dim_loja.query('fl_insert_update == "insert_update"')
+        if insert_updates.shape[0] != 0:
+            update_scd_values(insert_updates, conn)
+
+    if 'fl_insert_update' in dim_loja.columns:
+        dim_loja = dim_loja.query('fl_insert_update == "insert_update" or fl_insert_update == "insert"')
+        del dim_loja['fl_insert_update']
+
     (
         dim_loja.
         astype('string').
@@ -350,28 +222,61 @@ def load_dim_loja(dim_loja, conn, action):
     return dim_loja
 
 
-def update_new_values(dim_loja, conn):
-    new_names = dim_loja.query('fl_tipo_update == 3')
-    if len(new_names) > 0:
-        for cd in new_names['id_loja']:
-            nome = dim_loja.query(f"id_loja == {cd}")["id_loja"].item()
-            sql = (f'\
-                    UPDATE "dw"."d_loja"\
-                    SET "no_loja" = \'{str(nome)}\'\
-                    WHERE "cd_loja" = {cd} AND "fl_ativo" = 1;')
-            conn.execute(sql)
+def update_scd_values(dim_loja, conn):
+    """
+    Faz update dos dados que vão ser desativados na dim_loja
+    :param dim_loja: pandas.Dataframe
+    :param conn: conexão criada via SqlAlchemy com o servidor do DW;
 
-    new_values = dim_loja.query('fl_tipo_update == 2')
-    if len(new_values) > 0:
-        for cd in new_values['cd_loja']:
-            sql = (f'\
-                UPDATE "dw"."d_loja"\
-                SET "fl_ativo" = {0},\
-                "dt_fim" = \'{pd.to_datetime("today")}\'\
-                WHERE "cd_loja" = {cd} AND "fl_ativo" = 1;')
-            conn.execute(sql)
+    """
+    Session = sessionmaker(conn)
+    session = Session()
+    try:
+        metadata = sqla.MetaData(bind=conn)
+        datatable = sqla.Table('d_loja', metadata, schema='dw', autoload=True)
+        update = (
+            sqla.sql.update(datatable).values(
+                {'fl_ativo': 0, 'dt_fim': pd.to_datetime("today", format='%Y-%m-%d')}).
+            where(
+                sqla.and_(
+                    datatable.c.cd_loja.in_(dim_loja.cd_loja), datatable.c.fl_ativo == 1
+                )
+            )
+        )
+        session.execute(update)
+        session.flush()
+        session.commit()
+    finally:
+        session.close()
 
-    return dim_loja
+
+def update_values(dim_loja, conn):
+    """
+    Faz update dos dados que não precisam de um novo registro na dimensão loja
+    :param dim_loja: pandas.Dataframe
+    :param conn: conn -- conexão criada via SqlAlchemy com o servidor do DW;
+
+    """
+    Session = sessionmaker(conn)
+    session = Session()
+    try:
+        metadata = sqla.MetaData(bind=conn)
+        datatable = sqla.Table('d_loja', metadata, schema='dw', autoload=True)
+        for name in dim_loja['no_loja']:
+            update = (
+                sqla.sql.update(datatable).values(
+                    {'no_loja': name}).
+                where(
+                    sqla.and_(
+                        datatable.c.cd_loja.in_(dim_loja.cd_loja), datatable.c.fl_ativo == 1
+                    )
+                )
+            )
+            session.execute(update)
+            session.flush()
+            session.commit()
+    finally:
+        session.close()
 
 
 def run_dim_loja(conn):
@@ -381,20 +286,18 @@ def run_dim_loja(conn):
     parâmetros:
     conn -- conexão criada via SqlAlchemy com o servidor do DW;
     """
-    dim_loja = extract_dim_loja(conn)
-    if dim_loja is None:
+
+    if not dwt.verify_table_exists(conn=conn, schema='dw', table='d_loja'):
         (
-            extract_stage_loja(conn=conn).
-            pipe(treat_dim_loja).
+            extract_dim_loja(conn=conn).
+            pipe(treat_dim_loja, conn=conn).
             pipe(load_dim_loja, conn=conn, action='replace')
         )
     else:
         (
-            extract_new_records(conn).
-            pipe(update_new_values, conn=conn).
-            pipe(treat_updated_loja).
+            extract_dim_loja(conn=conn).
+            pipe(treat_dim_loja, conn=conn).
             pipe(load_dim_loja, conn=conn, action='append')
-
         )
 
 

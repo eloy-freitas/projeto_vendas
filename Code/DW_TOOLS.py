@@ -72,5 +72,4 @@ def find_max_sk(conn, schema, table):
 def verify_table_exists(conn, schema, table):
     if table in sqla.inspect(conn).get_table_names(schema=schema):
         return True
-    else:
-        return False
+    return False

@@ -1,4 +1,5 @@
 import pandas as pd
+import sqlalchemy as sqla
 
 
 def merge_input(left, right, left_on, right_on, surrogate_key, suff):
@@ -6,8 +7,8 @@ def merge_input(left, right, left_on, right_on, surrogate_key, suff):
 
     df = (
         left.
-            merge(right, how="left", left_on=left_on, right_on=right_on, suffixes=suff).
-            fillna(dict_na[list(dict_na)[0]])
+        merge(right, how="left", left_on=left_on, right_on=right_on, suffixes=suff).
+        fillna(dict_na[list(dict_na)[0]])
     )
 
     return df
@@ -59,3 +60,17 @@ def read_table(conn, schema, table_name, columns=None, where=None, distinct=Fals
     response = pd.read_sql_query(query, conn)
 
     return response
+
+
+def find_max_sk(conn, schema, table):
+    query = (
+        f'SELECT MAX(sk_{table.split("_")[1]}) FROM {schema}.{table};'
+    )
+    return conn.execute(query).fetchone()[0] + 1
+
+
+def verify_table_exists(conn, schema, table):
+    if table in sqla.inspect(conn).get_table_names(schema=schema):
+        return True
+    else:
+        return False

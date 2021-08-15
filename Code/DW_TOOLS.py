@@ -62,9 +62,9 @@ def read_table(conn, schema, table_name, columns=None, where=None, distinct=Fals
     return response
 
 
-def find_max_sk(conn, schema, table):
+def find_max_sk(conn, schema, table, sk_name):
     query = (
-        f'SELECT MAX(sk_{table.split("_")[1]}) FROM {schema}.{table};'
+        f'SELECT MAX({sk_name}) FROM {schema}.{table};'
     )
     return conn.execute(query).fetchone()[0] + 1
 

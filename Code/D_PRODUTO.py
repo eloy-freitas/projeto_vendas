@@ -3,19 +3,10 @@ import unidecode as uc
 import time as t
 from sqlalchemy.types import String, DateTime, Float, Integer
 from pandasql import sqldf
-import DW_TOOLS as dwt
-from CONEXAO import create_connection_postgre
+import Code.DW_TOOLS as dwt
+from Code.CONEXAO import create_connection_postgre
 
 pd.set_option('display.max_columns', None)
-columns_names = {
-    "id_produto": "cd_produto",
-    "nome_produto": "no_produto",
-    "cod_barra": "cd_barra",
-    "preco_custo": "vl_preco_custo",
-    "percentual_lucro": "vl_percentual_lucro",
-    "data_cadastro": "dt_cadastro",
-    "ativo": "fl_ativo"
-}
 
 categorias = {'cafe da manhã': {"CAFE", "ACHOCOLATADO", "CEREAIS", "PAO",
                                 "ACUCAR", "ADOCANTE", "BISCOITO",
@@ -56,7 +47,7 @@ def classificar_produto(nome):
     return 'Desconhecido' if result.max() == 0 else result.idxmax()
 
 
-def extract_stage_produto(conn):
+def extract_dim_produto(conn):
     """
     Extrai todas as tabelas necessárias para gerar a dimensão produto
     parâmetros:
@@ -64,59 +55,65 @@ def extract_stage_produto(conn):
     return:
     stg_produto -- pandas.Dataframe;
     """
-    stg_produto = dwt.read_table(
-        conn=conn,
-        schema='stage',
-        table_name='stg_produto',
-        columns=[
-            'id_produto',
-            'nome_produto',
-            'cod_barra',
-            'preco_custo',
-            'percentual_lucro',
-            'data_cadastro',
-            'ativo'],
-        where=f'"id_produto" > 0 order by "id_produto";'
+    stg_produto = (
+        dwt.read_table(
+            conn=conn,
+            schema='stage',
+            table_name='stg_produto',
+            columns=[
+                'id_produto',
+                'nome_produto',
+                'cod_barra',
+                'preco_custo',
+                'percentual_lucro',
+                'data_cadastro',
+                'ativo'
+            ]).
+        assign(
+            preco_custo=lambda x: x.preco_custo.apply(
+                lambda y: float(y.replace(",", "."))),
+            percentual_lucro=lambda x: x.percentual_lucro.apply(
+                lambda y: float(y.replace(",", "."))),
+            data_cadastro=lambda x: x.data_cadastro.apply(
+                lambda y: y[:10])).
+        assign(
+            data_cadastro=lambda x: x.data_cadastro.astype("datetime64")
+        )
     )
 
-    return stg_produto
-
-
-def extract_dim_produto(conn):
-    """
-    Extrai os dados da dimensão produto
-    parâmetros:
-    conn -- conexão criada via SqlAlchemy com o servidor DW;
-    return:
-    dim_produto -- pandas.Dataframe;
-    """
-    try:
-        dim_produto = dwt.read_table(
-            conn=conn,
-            schema='dw',
-            table_name='d_produto',
-            columns=[
-                'sk_produto',
-                'cd_produto',
-                'no_produto',
-                'cd_barra',
-                'vl_preco_custo',
-                'vl_percentual_lucro',
-                'dt_cadastro',
-                'fl_ativo',
-                'dt_inicio',
-                'dt_fim',
-                'ds_categoria'],
-            where=f'"cd_produto" > 0 \
-            and "fl_ativo" = 1\
-            order by "cd_produto";'
+    if dwt.verify_table_exists(conn=conn, schema='dw', table='d_produto'):
+        query = """
+                    SELECT 
+                        stg.id_produto, stg.nome_produto, stg.cod_barra, 
+                        stg.preco_custo, stg.percentual_lucro, stg.data_cadastro, 
+                        stg.ativo,
+                            CASE 
+                                WHEN dim.cd_produto IS NULL
+                                THEN 'insert'
+                                WHEN dim.vl_preco_custo != stg.preco_custo
+                                    OR dim.vl_percentual_lucro != stg.percentual_lucro
+                                THEN 'insert_update'
+                                    WHEN dim.no_produto != stg.nome_produto
+                                THEN 'only_update'
+                                ELSE 'none' 
+                            END AS fl_insert_update
+                    FROM stg_produto stg
+                    LEFT JOIN dw.d_produto dim 
+                    ON stg.id_produto = dim.cd_produto
+                    WHERE dim.fl_ativo = 1 or dim.fl_ativo is null;
+                """
+        tbl_produto = sqldf(query, {'stg_produto': stg_produto}, conn.url)
+    else:
+        tbl_produto = (
+            stg_produto.assign(
+                fl_insert_update='insert'
+            )
         )
-        return dim_produto
-    except:
-        return None
+
+    return tbl_produto
 
 
-def treat_dim_produto(stg_produto):
+def treat_dim_produto(tbl_produto):
     """
     Faz o tratamento dos dados extraidos das stages
     parâmetros:
@@ -131,110 +128,57 @@ def treat_dim_produto(stg_produto):
         "preco_custo",
         "percentual_lucro",
         "data_cadastro",
-        "ativo"
+        "ativo",
+        "fl_insert_update"
     ]
+
+    columns_names = {
+        "id_produto": "cd_produto",
+        "nome_produto": "no_produto",
+        "cod_barra": "cd_barra",
+        "preco_custo": "vl_preco_custo",
+        "percentual_lucro": "vl_percentual_lucro",
+        "data_cadastro": "dt_cadastro",
+        "ativo": "fl_ativo"
+    }
+
     dim_produto = (
-        stg_produto.
+        tbl_produto.
         filter(select_columns).
         rename(columns=columns_names).
         assign(
-            vl_preco_custo=lambda x: x.vl_preco_custo.apply(
-                lambda y: float(y.replace(",", "."))),
-            vl_percentual_lucro=lambda x: x.vl_percentual_lucro.apply(
-                lambda y: float(y.replace(",", "."))),
-            dt_cadastro=lambda x: x.dt_cadastro.apply(
-                lambda y: y[:10]),
             dt_inicio=lambda x: pd.to_datetime(x.dt_cadastro),
-            dt_fim=None).
-        assign(
+            dt_fim=None,
             ds_categoria=lambda x: x.no_produto.apply(
-                lambda y: classificar_produto(y))).
-        assign(
-            dt_cadastro=lambda x: pd.to_datetime(x.dt_cadastro),
-            no_produto=lambda x: x.no_produto.astype(str),
-            fl_ativo=lambda x: x.fl_ativo.astype("int64"))
+                lambda y: classificar_produto(y))
+        )
     )
 
-    dim_produto.insert(0, 'sk_produto', range(1, 1 + len(dim_produto)))
+    if dwt.verify_table_exists(conn=conn, schema='dw', table='d_produto'):
+        size = dwt.find_max_sk(
+            conn=conn,
+            schema='dw',
+            table='d_produto',
+            sk_name='sk_produto'
+        )
 
-    dim_produto = (
-        pd.DataFrame([
-            [-1, -1, "Não informado", -1, -1, -1, None, -1, None, None, "Não informado"],
-            [-2, -2, "Não aplicável", -2, -2, -2, None, -2, None, None, "Não aplicável"],
-            [-3, -3, "Desconhecido", -3, -3, -3, None, -3, None, None, "Desconhecido"]
-        ], columns=dim_produto.columns).append(dim_produto)
-    )
+        dim_produto.insert(0, 'sk_produto', range(size, size + len(dim_produto)))
+    else:
+        defaut_date = pd.to_datetime("1900-01-01", format='%Y-%m-%d')
+
+        dim_produto.insert(0, 'sk_produto', range(1, 1 + len(dim_produto)))
+
+        del dim_produto['fl_insert_update']
+
+        dim_produto = (
+            pd.DataFrame([
+                [-1, -1, "Não informado", -1, -1, -1, defaut_date, -1, defaut_date, None, "Não informado"],
+                [-2, -2, "Não aplicável", -2, -2, -2, defaut_date, -2, defaut_date, None, "Não aplicável"],
+                [-3, -3, "Desconhecido", -3, -3, -3, defaut_date, -3, defaut_date, None, "Desconhecido"]
+            ], columns=dim_produto.columns).append(dim_produto)
+        )
 
     return dim_produto
-
-
-def extract_new_produto(conn):
-    """
-    Extrai novos registros e registros atualizados na stage
-    parâmetros:
-    conn -- conexão criada via SqlAlchemy com o servidor DW;
-    return:
-    new_values: dataframe com as atualizações
-    """
-    df_stage = (
-        extract_stage_produto(conn).
-        rename(columns=columns_names).
-        assign(
-            vl_preco_custo=lambda x: x.vl_preco_custo.apply(
-                lambda y: float(y.replace(",", "."))),
-            vl_percentual_lucro=lambda x: x.vl_percentual_lucro.apply(
-                lambda y: float(y.replace(",", "."))),
-            dt_cadastro=lambda x: x.dt_cadastro.apply(
-                lambda y: y[:10])).
-        assign(dt_cadastro=lambda x: x.dt_cadastro.astype("datetime64"))
-    )
-
-    df_dw = extract_dim_produto(conn)
-
-    new_records = (
-        sqldf("\
-            SELECT df_stage.*\
-            FROM df_stage\
-            LEFT JOIN df_dw \
-            ON df_stage.cd_produto = df_dw.cd_produto\
-            WHERE df_dw.cd_produto IS NULL").
-        assign(
-            fl_tipo_update=1
-        )
-    )
-
-    new_updates = (
-        sqldf("\
-            SELECT stg.* \
-            FROM df_stage stg \
-            INNER JOIN df_dw dw \
-            ON stg.cd_produto = dw.cd_produto \
-            WHERE stg.vl_preco_custo != dw.vl_preco_custo\
-            OR stg.vl_percentual_lucro != dw.vl_percentual_lucro").
-        assign(
-            fl_tipo_update=2
-        )
-    )
-
-    new_names = (
-        sqldf("\
-            SELECT stg.* \
-            FROM df_stage stg \
-            INNER JOIN df_dw dw \
-            ON stg.cd_produto = dw.cd_produto \
-            WHERE stg.no_produto != dw.no_produto").
-        assign(
-            fl_tipo_update=3
-        )
-    )
-
-    new_values = (
-        pd.concat([new_records, new_updates, new_names]).assign(
-            df_size=df_dw['sk_produto'].max() + 1
-        )
-    )
-    print(new_updates)
-    return new_values
 
 
 def treat_new_produto(new_values, conn):
@@ -300,7 +244,7 @@ def treat_new_produto(new_values, conn):
     return trated_values
 
 
-def load_dim_produto(dim_produto, conn, action):
+def load_dim_produto(dim_produto, conn):
     """
     Faz a carga da dimensão produto no DW.
     parâmetros:
@@ -329,7 +273,7 @@ def load_dim_produto(dim_produto, conn, action):
             con=conn,
             name='d_produto',
             schema='dw',
-            if_exists=action,
+            if_exists='append',
             index=False,
             chunksize=100,
             dtype=data_types
@@ -343,24 +287,23 @@ def run_dim_produto(conn):
     parâmetros:
     conn -- conexão criada via SqlAlchemy com o servidor do DW;
     """
-    dim_produto = extract_dim_produto(conn)
-    if dim_produto is None:
-        (
-            extract_stage_produto(conn).
-            pipe(treat_dim_produto).
-            pipe(load_dim_produto, conn=conn, action='replace')
 
-        )
-    else:
-        (
-            extract_new_produto(conn).
-            pipe(treat_new_produto, conn=conn).
-            pipe(load_dim_produto, conn=conn, action='append')
-        )
+    dwt.verify_table_exists(conn=conn, schema='stage', table='stg_produto')
 
+    if dwt.verify_table_exists(conn=conn, schema='stage', table='stg_produto'):
+        tbl_produto = extract_dim_produto(conn)
+        df_produto = tbl_produto.query("fl_insert_update == 'insert'\
+                                    or fl_insert_update == 'insert_update' \
+                                    or fl_insert_update == 'only_update'"
+                                 )
+        if df_produto.shape[0] != 0:
+            (
+                treat_dim_produto(tbl_produto=df_produto, conn=conn).
+                    pipe(load_dim_produto, conn=conn)
+            )
 
 if __name__ == '__main__':
-    conn_dw = create_connection_postgre(
+    conn = create_connection_postgre(
         server="192.168.3.2",
         database="projeto_dw_vendas",
         username="itix",
@@ -368,5 +311,5 @@ if __name__ == '__main__':
         port="5432"
     )
     start = t.time()
-    run_dim_produto(conn_dw)
+    run_dim_produto(conn)
     print(f'exec time = {t.time() - start}')

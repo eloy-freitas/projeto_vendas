@@ -6,15 +6,15 @@ from CONEXAO import create_connection_postgre
 import DW_TOOLS as dwt
 
 
-def extract_stg_funcionario(conn):
+def extract_dim_funcionario(conn):
     """
     Extrai todas as tabelas necessárias para gerar a dimensão funcionario
 
-    parâmetros:
-    conn -- conexão criada via SqlAlchemy com o servidor DW;
+    :parameter:
+        conn -- sqlalchemy.engine;
 
-    return:
-    stg_funcionario -- pandas.Dataframe;
+    :return:
+        stg_funcionario -- pandas.Dataframe;
     """
     stg_funcionario = dwt.read_table(
         conn=conn,
@@ -29,86 +29,35 @@ def extract_stg_funcionario(conn):
         ]
     )
 
+    if dwt.verify_table_exists(conn=conn, table='d_funcionario', schema='dw'):
+        query = """
+                SELECT 
+                    stg.id_funcionario, 
+                    stg.nome, 
+                    stg.cpf, 
+                    stg.tel, 
+                    stg.data_nascimento 
+                FROM stg_funcionario stg 
+                LEFT JOIN dw.d_funcionario dim 
+                ON stg.id_funcionario = dim.cd_funcionario 
+                WHERE dim.cd_funcionario IS NULL
+            """
+        stg_funcionario = sqldf(query, {'stg_funcionario': stg_funcionario}, conn.url)
+
     return stg_funcionario
 
 
-def extract_dim_funcionario(conn):
-    """
-    Extrai os registros da dim_funcionario do DW
-
-    parâmetros:
-    conn -- conexão criada via SqlAlchemy com o servidor DW;
-
-    return:
-    dim_funcionario -- dataframe da dim_funcionario
-    """
-    try:
-        dim_funcionario = dwt.read_table(
-            conn=conn,
-            schema='dw',
-            table_name='d_funcionario',
-            columns=[
-                'sk_funcionario',
-                'cd_funcionario',
-                'no_funcionario',
-                'nu_cpf',
-                'nu_telefone',
-                'dt_nascimento'
-            ]
-        )
-
-        return dim_funcionario
-    except:
-        return None
-
-
-def extract_new_funcionario(conn):
-    """
-    Extrai novos registros na stage
-
-    parâmetros:
-    conn -- conexão criada via SqlAlchemy com o servidor DW;
-
-    return:
-    new_values -- dataframe com as atualizações
-    """
-    dim_funcionario = extract_dim_funcionario(conn)
-
-    stg_funcionario = extract_stg_funcionario(conn)
-
-    new_funcionarios = (
-        sqldf('\
-                SELECT stg.id_funcionario, \
-                stg.nome, \
-                stg.cpf, \
-                stg.tel, \
-                stg.data_nascimento \
-                FROM \
-                stg_funcionario stg \
-                LEFT JOIN dim_funcionario dim \
-                ON stg.id_funcionario = dim.cd_funcionario \
-                WHERE dim.cd_funcionario IS NULL')
-    )
-
-    new_values = (
-        new_funcionarios.assign(
-            df_size=dim_funcionario['sk_funcionario'].max() + 1
-        )
-    )
-
-    return new_values
-
-
-def treat_dim_funcionario(new_values):
+def treat_dim_funcionario(stg_funcionario, conn):
     """
     Faz o tratamento dos novos registros encontrados na stage
 
-    parâmetros:
-    conn -- conexão criada via SqlAlchemy com o servidor DW;
-    new_values -- novos registros ou registros atualizados no formato pandas.Dataframe;
+    :parameter:
+        conn -- sqlalchemy.engine;
+    :parameter
+        stg_funcionario -- pandas.Dataframe;
 
-    return:
-    trated_values -- dataframe dos novos registros tratados;
+    :return:
+        dim_funcionario -- pandas.Dataframe;
     """
     columns_names = {
         "id_funcionario": "cd_funcionario",
@@ -127,41 +76,47 @@ def treat_dim_funcionario(new_values):
     ]
 
     dim_funcionario = (
-        new_values.
+        stg_funcionario.
         filter(select_columns).
         rename(columns=columns_names).
         assign(
             dt_nascimento=lambda x: x.dt_nascimento.astype('datetime64'))
     )
 
-    if 'df_size' in new_values.columns:
-        size = new_values['df_size'].max()
+    if dwt.verify_table_exists(conn=conn, table='d_funcionario', schema='dw'):
+        size = dwt.find_max_sk(
+            conn=conn,
+            schema='dw',
+            table='d_funcionario',
+            sk_name='sk_funcionario'
+        )
+
         dim_funcionario.insert(0, 'sk_funcionario', range(size, size + len(dim_funcionario)))
     else:
+
+        defaut_date = pd.to_datetime("1900-01-01", format='%Y-%m-%d')
+
         dim_funcionario.insert(0, 'sk_funcionario', range(1, 1 + len(dim_funcionario)))
 
-    return dim_funcionario
-
-
-def treat_missing_data(dim_funcionario):
-    dim_funcionario = (
-        pd.DataFrame([
-            [-1, -1, "Não informado", -1, -1, None],
-            [-2, -2, "Não aplicável", -2, -2, None],
-            [-3, -3, "Desconhecido", -3, -3, None]
-        ], columns=dim_funcionario.columns).append(dim_funcionario)
-    )
+        dim_funcionario = (
+            pd.DataFrame([
+                [-1, -1, "Não informado", -1, -1, defaut_date],
+                [-2, -2, "Não aplicável", -2, -2, defaut_date],
+                [-3, -3, "Desconhecido", -3, -3, defaut_date]
+            ], columns=dim_funcionario.columns).append(dim_funcionario)
+        )
 
     return dim_funcionario
 
 
-def load_dim_funcionario(dim_funcionario, conn, action):
+def load_dim_funcionario(dim_funcionario, conn):
     """
     Faz a carga da dimensão funcionario no DW.
 
-    parâmetros:
-    dim_funcionario -- pandas.Dataframe;
-    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    :parameter:
+        dim_funcionario -- pandas.Dataframe;
+    :parameter:
+        conn -- sqlalchemy.engine;
     """
     data_types = {
         "sk_funcionario": Integer(),
@@ -179,7 +134,7 @@ def load_dim_funcionario(dim_funcionario, conn, action):
             con=conn,
             name='d_funcionario',
             schema='dw',
-            if_exists=action,
+            if_exists='append',
             index=False,
             chunksize=100,
             dtype=data_types
@@ -192,23 +147,17 @@ def run_dim_funcionario(conn):
     """
     Executa o pipeline da dimensão funcionario.
 
-    parâmetros:
-    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    :parameter:
+        conn -- sqlalchemy.engine;
     """
-    dim_funcionario = extract_dim_funcionario(conn)
-    if dim_funcionario is None:
-        (
-            extract_stg_funcionario(conn).
-            pipe(treat_dim_funcionario).
-            pipe(treat_missing_data).
-            pipe(load_dim_funcionario, conn=conn, action='replace')
-        )
-    else:
-        (
-            extract_new_funcionario(conn).
-            pipe(treat_dim_funcionario).
-            pipe(load_dim_funcionario, conn=conn, action='append')
-        )
+    if dwt.verify_table_exists(conn=conn, schema='stage', table='stg_funcionario'):
+        tbl_funcionario = extract_dim_funcionario(conn)
+
+        if tbl_funcionario.shape[0] != 0:
+            (
+                treat_dim_funcionario(stg_funcionario=tbl_funcionario, conn=conn).
+                pipe(load_dim_funcionario, conn=conn)
+            )
 
 
 if __name__ == '__main__':

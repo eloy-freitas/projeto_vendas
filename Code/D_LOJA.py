@@ -1,4 +1,3 @@
-import datetime
 import pandas as pd
 import time as t
 import sqlalchemy as sqla
@@ -13,10 +12,10 @@ def extract_dim_loja(conn):
     """
     Extrai todas as tabelas necessárias para gerar a dimensão loja
 
-    parâmetros:
-    conn -- conexão criada via SqlAlchemy com o servidor DW;
+    :parameter:
+       conn -- sqlalchemy.engine;
 
-    return:
+    :return:
     stg_loja_endereco -- pandas.Dataframe;
     """
     stg_loja = dwt.read_table(
@@ -77,7 +76,7 @@ def extract_dim_loja(conn):
             FROM stg_loja stg
             LEFT JOIN dw.d_loja dim 
             ON stg.id_loja = dim.cd_loja
-            WHERE dim.fl_ativo = 1
+            WHERE dim.fl_ativo = 1 or dim.fl_ativo is null;
         """
         stg_loja_endereco = sqldf(query, {'stg_loja': stg_loja_endereco}, conn.url)
     else:
@@ -94,12 +93,13 @@ def treat_dim_loja(stg_loja_endereco, conn):
     """
     Faz o tratamento dos dados extraidos das stages
 
-    parâmetros:
-    stg_loja_endereco -- pandas.Dataframe;
-    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    :parameter:
+        stg_loja_endereco -- pandas.Dataframe;
+    :parameter:
+        conn -- sqlalchemy.engine;
 
-    return:
-    dim_loja -- pandas.Dataframe;
+    :return:
+        dim_loja -- pandas.Dataframe;
     """
     columns_names = {
         "id_loja": "cd_loja",
@@ -141,7 +141,12 @@ def treat_dim_loja(stg_loja_endereco, conn):
     )
 
     if dwt.verify_table_exists(conn=conn, schema='dw', table='d_loja'):
-        size = dwt.find_max_sk(conn=conn, schema='dw', table='d_loja')
+        size = dwt.find_max_sk(
+            conn=conn,
+            schema='dw',
+            table='d_loja',
+            sk_name='sk_loja'
+        )
 
         dim_loja.insert(0, 'sk_loja', range(size, size + len(dim_loja)))
 
@@ -166,14 +171,14 @@ def treat_dim_loja(stg_loja_endereco, conn):
     return dim_loja
 
 
-def load_dim_loja(dim_loja, conn, action):
+def load_dim_loja(dim_loja, conn):
     """
     Faz a carga da dimensão loja no DW.
 
-    parâmetros:
-    dim_loja -- pandas.Dataframe;
-    conn -- conexão criada via SqlAlchemy com o servidor do DW;
-    action -- if_exists (append, replace...)
+    :parameter:
+        dim_loja -- pandas.Dataframe;
+    :parameter:
+        conn -- sqlalchemy.engine;
     """
     data_types = {
         "sk_loja": Integer(),
@@ -212,7 +217,7 @@ def load_dim_loja(dim_loja, conn, action):
             con=conn,
             name='d_loja',
             schema='dw',
-            if_exists=action,
+            if_exists='append',
             index=False,
             chunksize=100,
             dtype=data_types
@@ -225,9 +230,10 @@ def load_dim_loja(dim_loja, conn, action):
 def update_scd_values(dim_loja, conn):
     """
     Faz update dos dados que vão ser desativados na dim_loja
-    :param dim_loja: pandas.Dataframe
-    :param conn: conexão criada via SqlAlchemy com o servidor do DW;
-
+    :parameter:
+        dim_loja -- pandas.Dataframe
+    :parameter:
+        conn -- sqlalchemy.engine;
     """
     Session = sessionmaker(conn)
     session = Session()
@@ -253,8 +259,10 @@ def update_scd_values(dim_loja, conn):
 def update_values(dim_loja, conn):
     """
     Faz update dos dados que não precisam de um novo registro na dimensão loja
-    :param dim_loja: pandas.Dataframe
-    :param conn: conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    :parameter
+        dim_loja -- pandas.Dataframe
+    :parameter:
+        conn -- sqlalchemy.engine;
 
     """
     Session = sessionmaker(conn)
@@ -283,26 +291,27 @@ def run_dim_loja(conn):
     """
     Executa o pipeline da dimensão loja.
 
-    parâmetros:
-    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    :parameter:
+        conn -- sqlalchemy.engine;
     """
+    loja = dwt.verify_table_exists(conn=conn, schema='stage', table='stg_loja')
+    endereco = dwt.verify_table_exists(conn=conn, schema='stage', table='stg_endereco')
 
-    if not dwt.verify_table_exists(conn=conn, schema='dw', table='d_loja'):
-        (
-            extract_dim_loja(conn=conn).
-            pipe(treat_dim_loja, conn=conn).
-            pipe(load_dim_loja, conn=conn, action='replace')
-        )
-    else:
-        (
-            extract_dim_loja(conn=conn).
-            pipe(treat_dim_loja, conn=conn).
-            pipe(load_dim_loja, conn=conn, action='append')
-        )
+    if loja and endereco:
+        tbl_loja = extract_dim_loja(conn)
+        df_loja = tbl_loja.query("fl_insert_update == 'insert'\
+                                or fl_insert_update == 'insert_update' \
+                                or fl_insert_update == 'only_update'"
+                                 )
+        if df_loja.shape[0] != 0:
+            (
+                treat_dim_loja(stg_loja_endereco=df_loja, conn=conn).
+                pipe(load_dim_loja, conn=conn)
+            )
 
 
 if __name__ == '__main__':
-    conn_dw = create_connection_postgre(
+    conn = create_connection_postgre(
         server="192.168.3.2",
         database="projeto_dw_vendas",
         username="itix",
@@ -310,5 +319,5 @@ if __name__ == '__main__':
         port="5432"
     )
     start = t.time()
-    run_dim_loja(conn_dw)
+    run_dim_loja(conn)
     print(f'exec time = {t.time() - start}')

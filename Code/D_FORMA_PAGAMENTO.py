@@ -6,7 +6,7 @@ from Code.CONEXAO import create_connection_postgre
 import Code.DW_TOOLS as dwt
 
 
-def extract_stg_forma_pagamento(conn):
+def extract_dim_forma_pagamento(conn):
     """
     Extrai os dados da stage forma pagamento
 
@@ -143,7 +143,7 @@ def run_dim_forma_pagamento(conn):
     """
 
     if dwt.verify_table_exists(conn=conn, schema='stage', table='stg_forma_pagamento'):
-        tbl_pagamento = extract_stg_forma_pagamento(conn)
+        tbl_pagamento = extract_dim_forma_pagamento(conn)
 
         if tbl_pagamento.shape[0] != 0:
             (

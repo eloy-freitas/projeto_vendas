@@ -8,13 +8,13 @@ from Code.CONEXAO import create_connection_postgre
 
 def extract_dim_cliente(conn):
     """
-    Extrai os registros da stg_cliente
+    Extrai os registros da stages relacionadas ao cliente
 
-    parâmetros:
-    conn -- conexão criada via SqlAlchemy com o servidor DW;
+    :param:
+        conn -- sqlalchemy.engine;
 
-    return:
-    stg_cliente_endereco -- dataframe dos registros
+    :return:
+        stg_cliente_endereco -- pandas.Dataframe;
     """
 
     stg_cliente = dwt.read_table(
@@ -43,7 +43,7 @@ def extract_dim_cliente(conn):
         ]
     )
 
-    stg_cliente_endereco = (
+    tbl_cliente = (
         pd.merge(
             left=stg_cliente,
             right=stg_endereco,
@@ -68,23 +68,24 @@ def extract_dim_cliente(conn):
                 FROM stg_cliente stg 
                 LEFT JOIN dw.d_cliente dim 
                 ON stg.id_cliente = dim.cd_cliente 
-                WHERE dim.cd_cliente IS NULL
+                WHERE dim.cd_cliente IS NULL;
             """
-        stg_cliente_endereco = sqldf(query, {'stg_cliente': stg_cliente_endereco}, conn.url)
+        tbl_cliente = sqldf(query, {'stg_cliente': tbl_cliente}, conn.url)
 
-    return stg_cliente_endereco
+    return tbl_cliente
 
 
-def treat_dim_cliente(new_values, conn):
+def treat_dim_cliente(tbl_cliente, conn):
     """
     Faz o tratamento dos registros encontrados na stage
 
-    parâmetros:
-    conn -- conexão criada via SqlAlchemy com o servidor DW;
-    new_values -- novos registros ou registros atualizados no formato pandas.Dataframe;
+    :param:
+        conn -- sqlalchemy.engine;
+    :param:
+       tbl_cliente -- pandas.Dataframe;
 
-    return:
-    trated_values -- registros atualizados no formato pandas.Dataframe;
+    :return:
+        dim_cliente -- pandas.Dataframe;
     """
     columns_name = {
         "id_cliente": "cd_cliente",
@@ -111,7 +112,7 @@ def treat_dim_cliente(new_values, conn):
     ]
 
     dim_cliente = (
-        new_values.
+        tbl_cliente.
         filter(select_columns).
         rename(columns=columns_name).
         assign(
@@ -122,7 +123,13 @@ def treat_dim_cliente(new_values, conn):
     )
 
     if dwt.verify_table_exists(conn=conn, schema='dw', table='d_cliente'):
-        size = dwt.find_max_sk(conn=conn, schema='dw', table='d_cliente')
+        size = dwt.find_max_sk(
+            conn=conn,
+            schema='dw',
+            table='d_cliente',
+            sk_name='sk_cliente'
+        )
+
         dim_cliente.insert(0, 'sk_cliente', range(size, size + len(dim_cliente)))
     else:
         dim_cliente.insert(0, 'sk_cliente', range(1, 1 + len(dim_cliente)))
@@ -137,17 +144,19 @@ def treat_dim_cliente(new_values, conn):
                  "Desconhecido", "Desconhecido", "Desconhecido", "Desconhecido"]
             ], columns=dim_cliente.columns).append(dim_cliente)
         )
+
     return dim_cliente
 
 
-def load_dim_cliente(dim_cliente, conn, action):
+def load_dim_cliente(dim_cliente, conn):
     """
     Faz a carga da dimensão cliente no DW.
 
-    parâmetros:
-    dim_cliente -- pandas.Dataframe;
-    conn -- conexão criada via SqlAlchemy com o servidor do DW;
-    action -- ação que dever ser feita (raplace ou append)
+    :param:
+        dim_cliente -- pandas.Dataframe;
+    :param:
+        conn -- sqlalchemy.engine;
+
     """
     data_type = {
         "sk_cliente": Integer(),
@@ -168,7 +177,7 @@ def load_dim_cliente(dim_cliente, conn, action):
             con=conn,
             name='d_cliente',
             schema='dw',
-            if_exists=action,
+            if_exists='append',
             index=False,
             chunksize=100,
             dtype=data_type
@@ -184,18 +193,14 @@ def run_dim_cliente(conn):
     conn -- conexão criada via SqlAlchemy com o servidor do DW;
     """
 
-    if not dwt.verify_table_exists(conn=conn, schema='dw', table='d_cliente'):
-        (
-            extract_dim_cliente(conn).
-            pipe(treat_dim_cliente, conn=conn).
-            pipe(load_dim_cliente, conn=conn, action='replace')
-        )
-    else:
-        (
-            extract_dim_cliente(conn).
-            pipe(treat_dim_cliente, conn=conn).
-            pipe(load_dim_cliente, conn=conn, action='append')
-        )
+    if dwt.verify_table_exists(conn=conn, schema='stage', table='stg_cliente'):
+        tbl_cliente = extract_dim_cliente(conn)
+
+        if tbl_cliente.shape[0] != 0:
+            (
+                treat_dim_cliente(tbl_cliente=tbl_cliente, conn=conn).
+                pipe(load_dim_cliente, conn=conn)
+            )
 
 
 if __name__ == '__main__':

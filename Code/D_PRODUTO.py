@@ -1,6 +1,8 @@
 import pandas as pd
 import unidecode as uc
 import time as t
+import sqlalchemy as sqla
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import String, DateTime, Float, Integer
 from pandasql import sqldf
 import Code.DW_TOOLS as dwt
@@ -38,8 +40,11 @@ categorias = {'cafe da manhã': {"CAFE", "ACHOCOLATADO", "CEREAIS", "PAO",
 def classificar_produto(nome):
     """
     Classifica o produto baseado nas palavras chaves no nome
-    parâmetros:
-    nome -- string que representa o nome do produto;
+
+    :parameter:
+        nome -- string;
+    :return:
+        result.idxmax() -- coluna do dataframe com maior correspondência
     """
     nome = set(str(uc.unidecode(nome)).split())
     data_set = [len(categorias[x].intersection(nome)) for x in categorias]
@@ -50,10 +55,11 @@ def classificar_produto(nome):
 def extract_dim_produto(conn):
     """
     Extrai todas as tabelas necessárias para gerar a dimensão produto
-    parâmetros:
-    conn -- conexão criada via SqlAlchemy com o servidor DW;
-    return:
-    stg_produto -- pandas.Dataframe;
+
+    :parameter:
+        conn -- sqlalchemy.engine;
+    :return:
+        stg_produto -- pandas.Dataframe;
     """
     stg_produto = (
         dwt.read_table(
@@ -67,8 +73,7 @@ def extract_dim_produto(conn):
                 'preco_custo',
                 'percentual_lucro',
                 'data_cadastro',
-                'ativo'
-            ]).
+                'ativo']).
         assign(
             preco_custo=lambda x: x.preco_custo.apply(
                 lambda y: float(y.replace(",", "."))),
@@ -113,13 +118,15 @@ def extract_dim_produto(conn):
     return tbl_produto
 
 
-def treat_dim_produto(tbl_produto):
+def treat_dim_produto(tbl_produto, conn):
     """
     Faz o tratamento dos dados extraidos das stages
-    parâmetros:
-    stg_produto -- pandas.Dataframe;
-    return:
-    dim_produto -- pandas.Dataframe;
+    :parameter:
+        tbl_produto -- pandas.Dataframe;
+    :parameter:
+        conn -- sqlalchemy.engine;
+    :return:
+        dim_produto -- pandas.Dataframe;
     """
     select_columns = [
         "id_produto",
@@ -149,6 +156,7 @@ def treat_dim_produto(tbl_produto):
         assign(
             dt_inicio=lambda x: pd.to_datetime(x.dt_cadastro),
             dt_fim=None,
+            fl_ativo=lambda x: 1,
             ds_categoria=lambda x: x.no_produto.apply(
                 lambda y: classificar_produto(y))
         )
@@ -181,76 +189,72 @@ def treat_dim_produto(tbl_produto):
     return dim_produto
 
 
-def treat_new_produto(new_values, conn):
+def update_scd_values(dim_produto, conn):
     """
-    Faz o tratamento dos fluxos de execução da SCD produto
-    parâmetros:
-    conn -- conexão criada via SqlAlchemy com o servidor DW;
-    new_values -- novos registros ou registros atualizados no formato pandas.Dataframe;
-    return:
-    trated_values -- registros atualizados no formato pandas.Dataframe;
+    Faz update dos dados que vão ser desativados na dimensão produto
+    :parameter:
+        dim_produto -- pandas.Dataframe
+    :parameter:
+        conn -- sqlalchemy.engine;
     """
-    select_columns = [
-        "cd_produto",
-        "no_produto",
-        "cd_barra",
-        "dt_cadastro",
-        "vl_preco_custo",
-        "vl_percentual_lucro"
-    ]
-
-    size = new_values['df_size'].max()
-    new_names = new_values.query('fl_tipo_update == 3')
-
-    if len(new_values) > 0:
-        for cd in new_names['cd_produto']:
-            nome = new_names.query(f"cd_produto == {cd}")["no_produto"].item()
-            sql = (
-                f'\
-                UPDATE "dw"."d_produto"\
-                SET "no_produto" = \'{str(nome)}\'\
-                WHERE "cd_produto" = {cd} AND "fl_ativo" = 1;'
+    Session = sessionmaker(conn)
+    session = Session()
+    try:
+        metadata = sqla.MetaData(bind=conn)
+        datatable = sqla.Table('d_produto', metadata, schema='dw', autoload=True)
+        update = (
+            sqla.sql.update(datatable).values(
+                {'fl_ativo': 0, 'dt_fim': pd.to_datetime("today", format='%Y-%m-%d')}).
+            where(
+                sqla.and_(
+                    datatable.c.cd_produto.in_(dim_produto.cd_produto), datatable.c.fl_ativo == 1
+                )
             )
-            conn.execute(sql)
-
-    # extraindo linhas que serão atualizadas
-    trated_values = (
-        new_values.
-        query('fl_tipo_update != 3').
-        filter(select_columns).
-        assign(
-            dt_inicio=lambda x: pd.to_datetime("today"),
-            dt_fim=None,
-            fl_ativo=lambda x: 1,
-            dt_cadastro=lambda x: x.dt_cadastro.astype("datetime64"),
-            ds_categoria=lambda x: x.no_produto.apply(
-                lambda y: classificar_produto(y))
         )
-    )
+        session.execute(update)
+        session.flush()
+        session.commit()
+    finally:
+        session.close()
 
-    trated_values.insert(0, 'sk_produto', range(size, size + len(new_values)))
 
-    # identificando as sks que precisam ser atualizadas
-    for cd in trated_values['cd_produto']:
-        sql = (
-            f'\
-                UPDATE "dw"."d_produto"\
-                SET "fl_ativo" = {0},\
-                "dt_fim" = \'{pd.to_datetime("today")}\'\
-                WHERE "cd_produto" = {cd} and "fl_ativo" = 1;'
-        )
-        conn.execute(sql)
-
-    return trated_values
+def update_names(dim_produto, conn):
+    """
+    Faz update dos dados que não precisam de um novo registro na dimensão produto
+    :parameter
+        dim_produto -- pandas.Dataframe
+    :parameter:
+        conn -- sqlalchemy.engine;
+    """
+    Session = sessionmaker(conn)
+    session = Session()
+    try:
+        metadata = sqla.MetaData(bind=conn)
+        datatable = sqla.Table('d_produto', metadata, schema='dw', autoload=True)
+        for name in dim_produto['no_produto']:
+            update = (
+                sqla.sql.update(datatable).values(
+                    {'no_produto': name}).
+                where(
+                    sqla.and_(
+                        datatable.c.cd_produto.in_(dim_produto.cd_produto), datatable.c.fl_ativo == 1
+                    )
+                )
+            )
+            session.execute(update)
+            session.flush()
+            session.commit()
+    finally:
+        session.close()
 
 
 def load_dim_produto(dim_produto, conn):
     """
     Faz a carga da dimensão produto no DW.
-    parâmetros:
-    dim_produto -- pandas.Dataframe;
-    conn -- conexão criada via SqlAlchemy com o servidor do DW;
-    action -- if_exists (append, replace...)
+    :parameter:
+        dim_produto -- pandas.Dataframe;
+    :parameter:
+        conn -- sqlalchemy.engine;
     """
     data_types = {
         "sk_produto": Integer(),
@@ -266,6 +270,18 @@ def load_dim_produto(dim_produto, conn):
         "ds_categoria": String()
     }
 
+    if dwt.verify_table_exists(conn=conn, schema='dw', table='d_produto'):
+        names_updates = dim_produto.query('fl_insert_update == "only_update"')
+        if names_updates.shape[0] != 0:
+            update_names(names_updates, conn)
+
+        insert_updates = dim_produto.query('fl_insert_update == "insert_update"')
+        if insert_updates.shape[0] != 0:
+            update_scd_values(insert_updates, conn)
+
+    if 'fl_insert_update' in dim_produto.columns:
+        dim_produto = dim_produto.query('fl_insert_update == "insert_update" or fl_insert_update == "insert"')
+        del dim_produto['fl_insert_update']
     (
         dim_produto.
         astype('string').
@@ -284,23 +300,27 @@ def load_dim_produto(dim_produto, conn):
 def run_dim_produto(conn):
     """
     Executa o pipeline da dimensão produto.
-    parâmetros:
-    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    :parameter:
+        conn -- sqlalchemy.engine;
     """
 
     dwt.verify_table_exists(conn=conn, schema='stage', table='stg_produto')
 
     if dwt.verify_table_exists(conn=conn, schema='stage', table='stg_produto'):
         tbl_produto = extract_dim_produto(conn)
-        df_produto = tbl_produto.query("fl_insert_update == 'insert'\
-                                    or fl_insert_update == 'insert_update' \
-                                    or fl_insert_update == 'only_update'"
-                                 )
+        df_produto = (
+            tbl_produto.query(
+                "fl_insert_update == 'insert'\
+                or fl_insert_update == 'insert_update' \
+                or fl_insert_update == 'only_update'"
+            )
+        )
         if df_produto.shape[0] != 0:
             (
                 treat_dim_produto(tbl_produto=df_produto, conn=conn).
-                    pipe(load_dim_produto, conn=conn)
+                pipe(load_dim_produto, conn=conn)
             )
+
 
 if __name__ == '__main__':
     conn = create_connection_postgre(

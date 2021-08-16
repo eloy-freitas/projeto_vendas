@@ -8,8 +8,8 @@ def treat_dim_data():
     """
     Gera os dados da dimensão data com base em um intervalo de datas
 
-    return:
-    dim_data -- pandas.DataFrame;
+    :return:
+        dim_data -- pandas.DataFrame;
     """
     select_columns = [
         "dt_referencia"
@@ -58,9 +58,10 @@ def load_dim_data(dim_data, conn):
     """
     Faz a carga da dimensão data no DW.
 
-    parâmetros:
-    dim_cliente -- pandas.Dataframe;
-    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    :parameter:
+        dim_cliente -- pandas.Dataframe;
+    :parameter:
+        conn -- sqlalchemy.engine;
     """
     data_types = {
         "sk_data": Integer(),
@@ -92,8 +93,8 @@ def run_dim_data(conn):
     """
     Executa o pipeline da dimensão data.
 
-    parâmetros:
-    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    :parameter:
+        conn -- sqlalchemy.engine;
     """
     (
         treat_dim_data().

@@ -10,7 +10,7 @@ def extract_dim_cliente(conn):
     """
     Extrai os registros da stages relacionadas ao cliente
 
-    :param:
+    :parameter:
         conn -- sqlalchemy.engine;
 
     :return:
@@ -79,9 +79,9 @@ def treat_dim_cliente(tbl_cliente, conn):
     """
     Faz o tratamento dos registros encontrados na stage
 
-    :param:
+    :parameter:
         conn -- sqlalchemy.engine;
-    :param:
+    :parameter:
        tbl_cliente -- pandas.Dataframe;
 
     :return:
@@ -152,9 +152,9 @@ def load_dim_cliente(dim_cliente, conn):
     """
     Faz a carga da dimensão cliente no DW.
 
-    :param:
+    :parameter:
         dim_cliente -- pandas.Dataframe;
-    :param:
+    :parameter:
         conn -- sqlalchemy.engine;
 
     """
@@ -189,8 +189,8 @@ def run_dim_cliente(conn):
     """
     Executa o pipeline da dimensão cliente.
 
-    parâmetros:
-    conn -- conexão criada via SqlAlchemy com o servidor do DW;
+    :parameter:
+        conn -- sqlalchemy.engine;
     """
 
     if dwt.verify_table_exists(conn=conn, schema='stage', table='stg_cliente'):

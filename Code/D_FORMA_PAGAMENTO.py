@@ -10,7 +10,7 @@ def extract_dim_forma_pagamento(conn):
     """
     Extrai os dados da stage forma pagamento
 
-    :param:
+    :parameter:
         conn -- sqlalchemy.engine;
 
     :return:
@@ -47,9 +47,9 @@ def treat_dim_forma_pagamento(stg_forma_pagamento, conn):
     """
     Faz o tratamento dos novos registros encontrados na stage
 
-    :param:
+    :parameter:
         conn -- sqlalchemy.engine;
-    :param:
+    :parameter:
         stg_forma_pagamento -- pandas.Dataframe;
 
     :return:
@@ -108,9 +108,9 @@ def load_dim_forma_pagamento(dim_forma_pagamento, conn):
     """
     Faz a carga da dimensão forma pagamento no DW.
 
-    :param:
+    :parameter:
         dim_forma_pagamento -- pandas.Dataframe;
-    :param:
+    :parameter:
         conn -- sqlalchemy.engine;
     """
     data_types = {
@@ -138,7 +138,7 @@ def run_dim_forma_pagamento(conn):
     """
     Executa o pipeline da dimensão forma de pagamento.
 
-    :param:
+    :parameter:
         conn -- sqlalchemy.engine;
     """
 

@@ -60,7 +60,7 @@ def extract_dim_cliente(conn):
         )
     )
 
-    if dwt.verify_table_exists(conn=conn, table='d_cliente', schema='dw'):
+    if dwt.verify_table_exists(conn=conn, table='d_cliente_v2', schema='dw'):
         query = """
                 SELECT 
                     stg.id_cliente, 
@@ -84,7 +84,7 @@ def extract_dim_cliente(conn):
                         ELSE 'none' 
                     END AS fl_insert
                 FROM stg_cliente stg 
-                LEFT JOIN dw.d_cliente dim 
+                LEFT JOIN dw.d_cliente_v2 dim 
                 ON stg.id_cliente = dim.cd_cliente;
             """
         tbl_cliente = sqldf(query, {'stg_cliente': tbl_cliente}, conn.url)
@@ -146,7 +146,7 @@ def treat_dim_cliente(tbl_cliente, conn):
         )
     )
 
-    if dwt.verify_table_exists(conn=conn, schema='dw', table='d_cliente'):
+    if dwt.verify_table_exists(conn=conn, schema='dw', table='d_cliente_v2'):
         size = dwt.find_max_sk(
             conn=conn,
             schema='dw',
@@ -186,7 +186,7 @@ def update_values(dim_cliente, conn):
     session = Session()
     try:
         metadata = sqla.MetaData(bind=conn)
-        datatable = sqla.Table('d_cliente', metadata, schema='dw', autoload=True)
+        datatable = sqla.Table('d_cliente_v2', metadata, schema='dw', autoload=True)
 
         for row in dim_cliente.iterrows():
 
@@ -244,7 +244,7 @@ def load_dim_cliente(dim_cliente, conn):
         astype('string').
         to_sql(
             con=conn,
-            name='d_cliente',
+            name='d_cliente_v2',
             schema='dw',
             if_exists='append',
             index=False,
